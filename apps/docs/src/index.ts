@@ -35,4 +35,4 @@ app.get("/status", (req, res) => {
 });
 
 // Start the server
-server.listen(5000, () => console.log("Server running on port 5000"));
+server.listen(8080, () => console.log("Server running on port 5000"));
