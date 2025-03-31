@@ -1,5 +1,5 @@
 export type UserAuthPayload = {
-    userId: string;
+    id: string;
     email: string;
 };
   

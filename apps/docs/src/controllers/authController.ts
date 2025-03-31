@@ -24,7 +24,7 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
 
     // Fix: Convert `_id` properly
     const userId = user._id.toString();
-    const { accessToken, refreshToken } = generateToken({ userId, email: user.email });
+    const { accessToken, refreshToken } = generateToken({ id: userId, email: user.email });
 
     return res.status(201).json({
       user: { id: userId, name: user.name, email: user.email },
@@ -58,7 +58,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 
     // Fix: Convert `_id` properly
     const userId = user._id.toString();
-    const { accessToken, refreshToken } = generateToken({ userId, email: user.email });
+    const { accessToken, refreshToken } = generateToken({ id: userId, email: user.email });
 
     return res.status(200).json({
       user: { id: userId, name: user.name, email: user.email },

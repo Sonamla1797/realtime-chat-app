@@ -1,17 +1,23 @@
-/* import express from "express";
-import { createChat, getUserChats, getChatById } from "../controllers/chatController";
-import { authenticateUser } from "../middlewares/authMiddleware";
+import { Router } from "express";
+import { createChat, getUserChats, getChatById, removeChat } from "../controllers/chatController";
+import {handleChatRoom} from "../controllers/chatRoomController"
+import { verifyToken } from "../utils/jwt";
 
-const router = express.Router();
+const router: Router = Router();
 
-// Create a new chat (between two users or a group)
-router.post("/", authenticateUser, createChat);
+// Route to create a new chat
+router.post("/create", verifyToken, createChat);
 
-// Get all chats of a user
-router.get("/", authenticateUser, getUserChats);
+// Route to get all chats of a user
+router.get("/user", verifyToken, getUserChats);
 
-// Get a specific chat by ID
-router.get("/:chatId", authenticateUser, getChatById);
+// Route to get a specific chat by ID
+router.get("/:chatId", verifyToken, getChatById);
+
+//ROute to remoce a specific chat by ID
+router.delete("/:chatId", verifyToken, removeChat);
+
+//Route that handels chatroom using chatID
+router.get("/live/:chatId", verifyToken, handleChatRoom);
 
 export default router;
- */

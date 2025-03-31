@@ -1,17 +1,19 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Document, Schema } from 'mongoose';
 
-export interface FriendRequestDocument extends Document {
-  sender: mongoose.Types.ObjectId; // User who sent the friend request
-  receiver: mongoose.Types.ObjectId; // User who received the friend request
-  status: 'pending' | 'accepted' | 'declined'; // Status of the request
+export interface IFriendRequest extends Document {
+  requesterId: mongoose.Types.ObjectId;
+  receiverId: mongoose.Types.ObjectId;
+  status: 'pending' | 'accepted' | 'rejected';
   createdAt: Date;
 }
 
-const friendRequestSchema = new Schema<FriendRequestDocument>({
-  sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  receiver: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  status: { type: String, enum: ['pending', 'accepted', 'declined'], default: 'pending' },
-  createdAt: { type: Date, default: Date.now },
-});
+const FriendRequestSchema = new Schema<IFriendRequest>(
+  {
+    requesterId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    receiverId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' },
+  },
+  { timestamps: true }
+);
 
-export const FriendRequest = mongoose.model<FriendRequestDocument>('FriendRequest', friendRequestSchema);
+export const FriendRequest = mongoose.model<IFriendRequest>('FriendRequest', FriendRequestSchema);
