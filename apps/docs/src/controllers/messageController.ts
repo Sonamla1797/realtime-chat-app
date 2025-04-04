@@ -41,7 +41,7 @@ export const getChatMessages: RequestHandler = async (req: AuthRequest, res: Res
 
     // Fetch messages from the specified chat, sorted by timestamp
     const messages = await Message.find({ chatId }).sort({ timestamp: 1 });
-
+    console.log(messages),"from messageController.ts";
     res.status(200).json(messages);
   } catch (error) {
     res.status(500).json({ message: "Internal server error" });

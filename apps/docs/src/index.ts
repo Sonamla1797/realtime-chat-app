@@ -80,7 +80,8 @@ io.on("connection", (socket) => {
 
   // Handle incoming messages
   socket.on("sendMessage", async (data) => {
-    const { chatId, senderId, content } = data;
+    const { chatId, senderId, text } = data;
+   console.log("Received message:", data);  
 
     try {
       
@@ -88,7 +89,7 @@ io.on("connection", (socket) => {
       const newMessage = new Message({
         chatId,
         sender: senderId,
-        content,
+        content:text,
       });
 
       await newMessage.save();
@@ -96,7 +97,7 @@ io.on("connection", (socket) => {
       // Emit the message to all users in the chat room
       io.to(chatId).emit("message", {
         senderId,
-        content,
+        text: newMessage.content,
         timestamp: newMessage.timestamp,
       });
 
