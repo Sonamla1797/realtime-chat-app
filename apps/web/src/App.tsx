@@ -1,65 +1,94 @@
 import { useEffect, useState } from "react";
-import { io, Socket } from "socket.io-client";
+import { io } from "socket.io-client";
 
-// Define the Message interface
-interface Message {
-  senderId: string;
-  content: string;
-  timestamp: string;
-}
+const socket = io("http://localhost:5000", { autoConnect: false }); // Prevent auto-connect
 
-export default function Chat({ chatId, userId }: { chatId: string; userId: string }) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [socket, setSocket] = useState<Socket | null>(null);
+const ChatPage = () => {
+  const chatId = "67ea976fcfb0c23011e8b8fc";
+  const [messages, setMessages] = useState<{ senderId: string; text: string; timestamp: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newMessage, setNewMessage] = useState("");
 
   useEffect(() => {
-    if (!chatId) return; // Prevent connecting if chatId is not available
+    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YzYyNjc4OTRiNTU1Y2NmMzg4NmEwOCIsImVtYWlsIjoic29uYW1sYS5zaGVycGFAb3V0bG9vay5jb20iLCJpYXQiOjE3NDM3NjA0MDQsImV4cCI6MTc0Mzc2NDAwNH0.trjBq6NSwzRo4WJh7BwRXN0GsMcqxllT8THefksQ9No";
+    if (!token) {
+      console.error("⚠️ No token found! User must log in.");
+      return;
+    }
 
-    // Initialize socket connection
-    const newSocket = io("http://localhost:5000");
-    setSocket(newSocket);
+    fetch(`http://localhost:5000/api/messages/${chatId}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        setMessages(
+          data.map((msg: any) => ({
+            senderId: msg.sender,
+            text: msg.content,
+            timestamp: msg.timestamp,
+          }))
+        );
 
-    // Join the chat room
-    newSocket.emit("joinChat", chatId);
+        socket.connect();
+        socket.emit("joinChat", chatId);
 
-    // Listen for incoming messages
-    newSocket.on("message", (msg: Message) => {
-      setMessages((prev) => [...prev, msg]);
-    });
+        socket.on("receiveMessage", (message) => {
+          setMessages((prev) => [...prev, message]);
+        });
+      })
+      .catch((error) => console.error("❌ Error fetching messages:", error))
+      .finally(() => setLoading(false));
 
     return () => {
-      // Leave the chat room when the component unmounts
-      newSocket.emit("leaveChat", chatId);
-      newSocket.off("message");
-      newSocket.disconnect(); // Close socket connection
+      socket.off("receiveMessage");
+      socket.disconnect();
     };
   }, [chatId]);
 
   const sendMessage = () => {
-    if (input.trim() && socket) {
-      // Emit the message event to send the message
-      socket.emit("sendMessage", {
-        chatId,
-        senderId: userId,
-        content: input,
-      });
-      setInput(""); // Clear input field
-    }
+    if (newMessage.trim() === "") return;
+    
+    const messageData = {
+      senderId: "67c6267894b555ccf3886a08", // Replace with actual sender ID
+      text: newMessage,
+      timestamp: new Date().toISOString(),
+    };
+
+    socket.emit("sendMessage", { chatId, ...messageData });
+    setMessages((prev) => [...prev, messageData]);
+    setNewMessage("");
   };
 
   return (
     <div>
       <h1>Chat Room: {chatId}</h1>
+      {loading ? <p>Loading messages...</p> : null}
       <div>
-        {messages.map((msg, i) => (
-          <p key={i}>
-            <strong>{msg.senderId}:</strong> {msg.content} <em>({msg.timestamp})</em>
+        {messages.map((msg, index) => (
+          <p key={index}>
+            <strong>{msg.senderId}:</strong> {msg.text} {" "}
+            <small>({new Date(msg.timestamp).toLocaleTimeString()})</small>
           </p>
         ))}
       </div>
-      <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Type a message..." />
-      <button onClick={sendMessage}>Send</button>
+      <div>
+        <input
+          type="text"
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          placeholder="Type a message..."
+        />
+        <button onClick={sendMessage}>Send</button>
+      </div>
     </div>
   );
-}
+};
+
+export default ChatPage;
