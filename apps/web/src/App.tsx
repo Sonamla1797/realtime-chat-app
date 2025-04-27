@@ -5,9 +5,16 @@ import ChatWindow from "./components/ChatWindow"
 import ChatList from "./components/ChatList"
 import GroupChat from "./components/Groupchat"
 import FriendRequests from "./components/FriendRequests"
-import Login from "./pages/login"
-import Signup from "./pages/signup"
+import Login from "./auth/login"
+import Signup from "./auth/signup"
 import "./App.css"
+
+
+if (typeof global === 'undefined') {
+  global = window;
+}
+
+
 
 function App() {
   return (

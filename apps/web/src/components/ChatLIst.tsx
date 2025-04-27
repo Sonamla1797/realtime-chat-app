@@ -1,57 +1,39 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect,useRef } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { Search, Users, UserPlus, Plus, MoreVertical, Bell, Moon, Settings, Star, Archive, Video, Bot } from 'lucide-react'
+import { Search, Plus, MoreVertical, Video, Bot } from 'lucide-react'
 import { useAuth } from "../context/AuthContext"
-import { mockUsers } from "../lib/mock-data"
+//import { mockUsers } from "../lib/mock-data"
 import VideoCall from "./VideoCall"
 import IncomingCallNotification from "./IncomingCallNotification"
+//import { dgroup , dstatus} from "./dummy";
+import { FriendDialogBox, GroupDialogBox } from "./dialogbox/DialogBox"
+import { User, Friends, Group } from "../type"
+import setupLocalSD from "./localVid"
+
+import { getSocket } from "../sockets/socket"
+import SimplePeer from "simple-peer"
+import Header from "./chatComponents/Header"
+import { set } from "date-fns"
 
 // Define isPreviewMode directly in this file if the import is causing issues
-const isPreviewMode = () => {
+/* const isPreviewMode = () => 
   return (
     typeof window !== "undefined" &&
     (window.location.hostname === "localhost" || window.location.hostname.includes("vercel.app"))
   )
 }
-
-interface User {
-  id: string
-  firstName: string
-  lastName: string
-  online: boolean
-  lastMessage?: string
-  isAI?: boolean
-}
-
-interface StatusUpdate {
-  id: string
-  userId: string
-  userName: string
-  userInitials: string
-  content: string
-  timestamp: string
-  viewed: boolean
-}
-
-interface Group {
-  id: string
-  name: string
-  avatar: string
-  description: string
-  members: number
-  lastMessage?: string
-  lastActivity: string
-}
+ */
 
 export default function ChatList() {
   const [activeTab, setActiveTab] = useState("chats")
   const [users, setUsers] = useState<User[]>([])
-  const [statusUpdates, setStatusUpdates] = useState<StatusUpdate[]>([])
+  //const [statusUpdates, setStatusUpdates] = useState<StatusUpdate[]>([])
+  const [friends, setFriends] = useState<Friends[]>([])
   const [groups, setGroups] = useState<Group[]>([])
   const [searchQuery, setSearchQuery] = useState("")
-  const [showMenu, setShowMenu] = useState(false)
+ 
   const [darkMode, setDarkMode] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [showFavorites, setShowFavorites] = useState(false)
@@ -62,192 +44,156 @@ export default function ChatList() {
   const navigate = useNavigate()
 
   const [showVideoCall, setShowVideoCall] = useState(false)
-  const [showIncomingCall, setShowIncomingCall] = useState(false)
-  const [currentCaller, setCurrentCaller] = useState({ name: "", id: "" })
 
+  const [currentCaller, setCurrentCaller] = useState({ name: "", id: "" })
+  const [showAddFriendDialog, setShowAddFriendDialog] = useState(false);
+  const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
+  const peerRef = useRef<SimplePeer.Instance | null>(null) // Store the peer connection
+
+  const localVideoRef = useRef<HTMLVideoElement>(null!) 
+  const remoteVideoRef = useRef<HTMLVideoElement>(null!) 
+  
+  const [incomingCall, setIncomingCall] = useState<{ from: string; signal: any } | null>(null)
+  const[showIncomingCall, setShowIncomingCall] = useState(false); // Show incoming call modal/notification  
+
+
+/*  const [peerConnection, setPeerConnection] = useState<SimplePeer.Instance | null>(null); // Store the peer connection */
+
+
+  const cuser = JSON.parse(localStorage.getItem("user") || "{}");
+  const socket = getSocket();
+
+
+  useEffect(() => {
+    socket.emit("register", { userId: cuser.id });
+  
+    socket.on("incoming-call", ({ from, signal }) => {
+      setIncomingCall({ from, signal });
+      setShowIncomingCall(true);
+    });
+  
+    socket.on("answer", ({ signal }) => {
+      // When the caller receives the answer, complete the handshake
+      peerRef.current?.signal(signal);
+    });
+  
+    socket.on("reject-call", () => {
+      alert("Call was rejected.");
+      setShowVideoCall(false);
+    });
+  
+    return () => {
+      socket.off("incoming-call");
+      socket.off("answer");
+      socket.off("reject-call");
+    };
+  }, []);
+  
+  
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate("/login")
-      return
+      navigate("/login");
+      return;
     }
+   
+    fetchChats();
+    fetchFriends()
 
-    fetchUsers()
-    loadDummyData()
-  }, [isAuthenticated, navigate])
+  }, [isAuthenticated, navigate]);
 
-  useEffect(() => {
+/*   useEffect(() => {
     // Simulate an incoming call after 30 seconds
-    const incomingCallTimeout = setTimeout(() => {
-      if (!showVideoCall && !showIncomingCall) {
-        const randomUser = users[Math.floor(Math.random() * users.length)]
-        setCurrentCaller({
-          name: `${randomUser.firstName} ${randomUser.lastName}`,
-          id: randomUser.id,
-        })
-        setShowIncomingCall(true)
-      }
-    }, 30000)
+    if (!showVideoCall && !showIncomingCall) {
+      const randomUser = users[Math.floor(Math.random() * users.length)]
+      setCurrentCaller({
+        name: `${randomUser.firstName} ${randomUser.lastName}`,
+        id: randomUser.id,
+      })
+      setShowIncomingCall(true)
+    }
 
     return () => {
       clearTimeout(incomingCallTimeout)
     }
-  }, [showVideoCall, showIncomingCall, users])
+  }, [showVideoCall, showIncomingCall, users]) */
 
-  const loadDummyData = () => {
-    // Dummy status updates
-    const dummyStatusUpdates: StatusUpdate[] = [
-      {
-        id: "status1",
-        userId: "user1",
-        userName: "Ted Mosby",
-        userInitials: "TM",
-        content: "Working on a new building design! 🏢",
-        timestamp: "2 hours ago",
-        viewed: false,
-      },
-      {
-        id: "status2",
-        userId: "user2",
-        userName: "Barney Stinson",
-        userInitials: "BS",
-        content: "Suit up! 👔",
-        timestamp: "4 hours ago",
-        viewed: false,
-      },
-      {
-        id: "status3",
-        userId: "user3",
-        userName: "Marshall Erikson",
-        userInitials: "ME",
-        content: "Just won another case! ⚖️",
-        timestamp: "6 hours ago",
-        viewed: true,
-      },
-      {
-        id: "status4",
-        userId: "user4",
-        userName: "Lily Aldrin",
-        userInitials: "LA",
-        content: "New art project coming soon! 🎨",
-        timestamp: "8 hours ago",
-        viewed: true,
-      },
-      {
-        id: "status5",
-        userId: "user5",
-        userName: "Robin Scherbatsky",
-        userInitials: "RS",
-        content: "Live from New York! 📺",
-        timestamp: "10 hours ago",
-        viewed: false,
-      },
-    ]
-
-    // Dummy groups - Adding more groups to test scrolling
-    const dummyGroups: Group[] = [
-      {
-        id: "group1",
-        name: "Dessert Debate",
-        avatar: "DD",
-        description: "Chef Alex & 31 others",
-        members: 32,
-        lastMessage: "Great choice 🍰",
-        lastActivity: "5 min ago",
-      },
-      {
-        id: "group2",
-        name: "Architecture Club",
-        avatar: "AC",
-        description: "Ted & 15 others",
-        members: 16,
-        lastMessage: "Check out this new design!",
-        lastActivity: "2 hours ago",
-      },
-      {
-        id: "group3",
-        name: "Legal Team",
-        avatar: "LT",
-        description: "Marshall & 8 others",
-        members: 9,
-        lastMessage: "Meeting at 3pm tomorrow",
-        lastActivity: "Yesterday",
-      },
-      {
-        id: "group4",
-        name: "Art Enthusiasts",
-        avatar: "AE",
-        description: "Lily & 24 others",
-        members: 25,
-        lastMessage: "New exhibition this weekend!",
-        lastActivity: "2 days ago",
-      },
-      {
-        id: "group5",
-        name: "News Anchors",
-        avatar: "NA",
-        description: "Robin & 12 others",
-        members: 13,
-        lastMessage: "Breaking news: We're awesome!",
-        lastActivity: "3 days ago",
-      },
-      {
-        id: "group6",
-        name: "Coffee Lovers",
-        avatar: "CL",
-        description: "Barista Joe & 18 others",
-        members: 19,
-        lastMessage: "Anyone tried the new blend?",
-        lastActivity: "4 days ago",
-      },
-      {
-        id: "group7",
-        name: "Book Club",
-        avatar: "BC",
-        description: "Emily & 12 others",
-        members: 13,
-        lastMessage: "Next book: The Great Gatsby",
-        lastActivity: "5 days ago",
-      },
-      {
-        id: "group8",
-        name: "Fitness Fanatics",
-        avatar: "FF",
-        description: "Trainer Mike & 22 others",
-        members: 23,
-        lastMessage: "New workout routine posted!",
-        lastActivity: "1 week ago",
-      },
-      {
-        id: "group9",
-        name: "Travel Buddies",
-        avatar: "TB",
-        description: "Sarah & 30 others",
-        members: 31,
-        lastMessage: "Planning trip to Bali next month",
-        lastActivity: "2 weeks ago",
-      },
-      {
-        id: "group10",
-        name: "Tech Talk",
-        avatar: "TT",
-        description: "Developer Dan & 45 others",
-        members: 46,
-        lastMessage: "Did you see the new AI features?",
-        lastActivity: "3 weeks ago",
-      },
-    ]
-
-    setStatusUpdates(dummyStatusUpdates)
-    setGroups(dummyGroups)
-  }
-
-  const fetchUsers = async () => {
+  
+  const fetchChats = async () => {
     try {
-      if (isPreviewMode()) {
-        // Use mock data in preview mode
-        setUsers(mockUsers)
-        return
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const token = localStorage.getItem("accessToken");
+      const userId = user.id;
+     
+
+      if (!userId) {
+        console.error("User ID not found in localStorage.");
+        return;
       }
+  
+      const response = await fetch("http://localhost:5000/api/chats/user", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "userId": userId,
+        },
+        credentials: "include",
+        
+      });
+  
+      if (!response.ok) {
+        throw new Error("Failed to fetch chats");
+      }
+      
+      const chats = await response.json();
+      setUsers(chats);
+      // Filter only group chats
+      const groupChats = chats.filter((chat: any) => chat.type === "group");
+  
+      const formattedGroups = groupChats.map((group: any) => ({
+        id: group._id,
+        name: group.name,
+        participants: group.participants,
+      }));
+  
+      setGroups(formattedGroups);
+    } catch (error) {
+      console.error("Error fetching groups:", error);
+    }
+  };
+  const fetchFriends = async () => {
+    try {
+
+      const token = localStorage.getItem("accessToken");
+      const userId = cuser.id;
+
+      if (!userId) {
+        console.error("User ID not found in localStorage.");
+        return;
+      }
+  
+      const response = await fetch("http://localhost:5000/api/friend/friends", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "userId": userId,
+        },
+        credentials: "include",
+        
+      });
+  
+      if (!response.ok) {
+        throw new Error("Failed to fetch friends");
+      }
+      
+      const friendsList = await response.json();
+      setFriends(friendsList);
+    } catch (error) {
+      console.error("Error fetching friends:", error);
+    }
+  }
+/*   const fetchUsers = async () => {
+    try {
+      
 
       const response = await fetch("http://localhost:5000/api/users", {
         credentials: "include",
@@ -262,8 +208,7 @@ export default function ChatList() {
       // Fallback to mock data
       setUsers(mockUsers)
     }
-  }
-
+ */
   const handleLogout = () => {
     logout()
     navigate("/login")
@@ -304,47 +249,135 @@ export default function ChatList() {
 
   const filteredUsers = users.filter((user) => {
     // Filter by search query
-    const fullName = `${user.firstName} ${user.lastName}`.toLowerCase()
+    const fullName = `${user.type === "group" ?user.name: user.participants.find(p => p.name !== cuser.name)?.name}`
     const matchesSearch = fullName.includes(searchQuery.toLowerCase())
 
     // Filter by archived status if showing archived
     if (showArchived) {
-      return archived.includes(user.id) && matchesSearch
+      return archived.includes(user._id) && matchesSearch
     }
 
     // Filter by favorite status if showing favorites
     if (showFavorites) {
-      return favorites.includes(user.id) && matchesSearch
+      return favorites.includes(user._id) && matchesSearch
     }
 
     // Otherwise show non-archived contacts
-    return !archived.includes(user.id) && matchesSearch
+    return !archived.includes(user._id) && matchesSearch
   })
 
   const filteredGroups = groups.filter((group) => {
     return group.name.toLowerCase().includes(searchQuery.toLowerCase())
   })
 
-  const getInitials = (firstName: string, lastName: string) => {
-    return `${firstName.charAt(0)}${lastName.charAt(0)}`
+  const getInitials = (userName: string) => {
+    return `${userName.charAt(0)}`
   }
 
-  const handleStartCall = (userId: string, userName: string) => {
-    setCurrentCaller({
-      name: userName,
-      id: userId,
-    })
-    setShowVideoCall(true)
-  }
-
-  const handleAcceptCall = () => {
+/*   const handleAcceptCall = () => {
     setShowIncomingCall(false)
     setShowVideoCall(true)
-  }
-
-  const handleDeclineCall = () => {
+  } */
+    const initiateCall = async (targetChatId: string) => {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+        localVideoRef.current.play().catch((error) => {
+          console.error("Local video play prevented:", error);
+        });
+      }
+     
+      peerRef.current = new SimplePeer({
+        initiator: true,
+        trickle: false,
+        stream: stream,
+      });
+    
+      peerRef.current.on("signal", (data) => {
+        socket.emit("call-user", {
+          to: targetChatId,
+          from: cuser.id,
+          signal: data,
+        });
+      });
+    
+      peerRef.current?.on("stream", (remoteStream) => {
+        if (remoteVideoRef.current) {
+          console.log("Remote stream received:", remoteStream);
+          remoteVideoRef.current.srcObject = remoteStream;
+          remoteVideoRef.current.play().catch((error) => {
+            console.error("Remote video play prevented:", error);
+          });
+        }
+      });
+    
+      peerRef.current.on('connect', () => {
+        console.log('Connected! successful handshake');
+      });
+    
+      setShowVideoCall(true);
+    };
+    
+    const acceptCall = async (): Promise<void> => {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+    
+      peerRef.current = new SimplePeer({
+        initiator: false,
+        trickle: false,
+        stream: stream,
+      });
+    
+      peerRef.current.on("signal", (signalData) => {
+        socket.emit("answer", {
+          to: incomingCall?.from || "",
+          signal: signalData,
+        });
+      });
+    
+      peerRef.current?.on("stream", (remoteStream) => {
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = remoteStream;
+          remoteVideoRef.current.play().catch((error) => {
+            console.error("Remote video play prevented:", error);
+          });
+        }
+      });
+    
+      peerRef.current.on('connect', () => {
+        console.log('Connected!');
+      });
+    
+      // VERY important: apply caller's offer
+      if (incomingCall?.signal) {
+        peerRef.current.signal(incomingCall.signal);
+      }
+    
+      setShowIncomingCall(false);
+      setShowVideoCall(true);
+    };
+    
+  
+    /* const handleDeclineCall = () => {
     setShowIncomingCall(false)
-  }
+  } */
+  const rejectCall = () => {
+    if (incomingCall) {
+      socket.emit("reject-call", { to: incomingCall.from }); // userId of caller
+    }
+    setShowIncomingCall(false);
+  };
+  const handleEndCall = () => {
+   
+    setShowVideoCall(false);
+
+  };
+  
+
+  
 
   return (
     <div className="chat-container">
@@ -362,94 +395,17 @@ export default function ChatList() {
           style={{ display: "flex", flexDirection: "column", height: "100%", padding: "1rem" }}
         >
           {/* Header with Settings Menu */}
-          <div className="flex items-center" style={{ justifyContent: "space-between", marginBottom: "1rem" }}>
-            <h1 className="card-title">Messages</h1>
-            <div style={{ display: "flex", gap: "1rem" }}>
-              <div style={{ position: "relative" }} onClick={() => setShowMenu(!showMenu)}>
-                <Settings size={24} color="white" style={{ cursor: "pointer" }} />
-
-                {/* Settings dropdown menu */}
-                {showMenu && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      right: 0,
-                      top: "100%",
-                      backgroundColor: darkMode ? "rgba(0, 0, 0, 0.8)" : "rgba(255, 255, 255, 0.9)",
-                      borderRadius: "0.5rem",
-                      padding: "0.5rem",
-                      width: "200px",
-                      zIndex: 10,
-                      boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        padding: "0.5rem",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                        color: darkMode ? "white" : "#333",
-                        cursor: "pointer",
-                      }}
-                      onClick={toggleDarkMode}
-                    >
-                      <Moon size={18} />
-                      <span>{darkMode ? "Light Mode" : "Dark Mode"}</span>
-                    </div>
-                    <div
-                      style={{
-                        padding: "0.5rem",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                        color: darkMode ? "white" : "#333",
-                        cursor: "pointer",
-                      }}
-                      onClick={toggleNotifications}
-                    >
-                      <Bell size={18} />
-                      <span>{notifications ? "Mute Notifications" : "Enable Notifications"}</span>
-                    </div>
-                    <div
-                      style={{
-                        padding: "0.5rem",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                        color: darkMode ? "white" : "#333",
-                        cursor: "pointer",
-                      }}
-                      onClick={() => setShowFavorites(!showFavorites)}
-                    >
-                      <Star size={18} />
-                      <span>{showFavorites ? "Show All Contacts" : "Show Favorites"}</span>
-                    </div>
-                    <div
-                      style={{
-                        padding: "0.5rem",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                        color: darkMode ? "white" : "#333",
-                        cursor: "pointer",
-                      }}
-                      onClick={() => setShowArchived(!showArchived)}
-                    >
-                      <Archive size={18} />
-                      <span>{showArchived ? "Show Active Chats" : "Show Archived"}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <Link to="/friend-requests" style={{ color: "white" }}>
-                <UserPlus size={24} />
-              </Link>
-              <Link to="/group" style={{ color: "white" }}>
-                <Users size={24} />
-              </Link>
-            </div>
-          </div>
+          <Header
+        darkMode={darkMode}
+        toggleDarkMode={toggleDarkMode}
+        notifications={notifications}
+        toggleNotifications={toggleNotifications}
+        showFavorites={showFavorites}
+        setShowFavorites={setShowFavorites}
+        showArchived={showArchived}
+        setShowArchived={setShowArchived}
+        name={cuser.name}
+      />
 
           {/* Filter indicators */}
           {(showFavorites || showArchived) && (
@@ -498,7 +454,7 @@ export default function ChatList() {
             </div>
             <div
               className={`tab ${activeTab === "status" ? "active" : ""}`}
-              onClick={() => setActiveTab("status")}
+              onClick={() => setActiveTab("friends")}
               style={{
                 backgroundColor: activeTab === "status" ? "#f97316" : "rgba(255, 255, 255, 0.1)",
                 color: "white",
@@ -617,35 +573,39 @@ export default function ChatList() {
 
                 {filteredUsers.length > 0 ? (
                   filteredUsers.map((user) => (
-                    <div key={user.id} style={{ position: "relative" }}>
+                    
+                    <div key={user._id} style={{ position: "relative" }}>
+                      
                       <Link
-                        to={`/chat/${user.id}`}
+                      
+                        to={`/chat/${user._id}`}
                         className="contact-item"
                         style={{
-                          backgroundColor: user.isAI
+                          backgroundColor: false
                             ? "rgba(76, 175, 80, 0.2)"
                             : darkMode
                               ? "rgba(255, 255, 255, 0.05)"
                               : "rgba(255, 255, 255, 0.1)",
-                          opacity: archived.includes(user.id) ? 0.7 : 1,
-                          border: user.isAI ? "1px solid rgba(76, 175, 80, 0.5)" : undefined,
+                          opacity: archived.includes(user._id) ? 0.7 : 1,
+                          border: false ? "1px solid rgba(76, 175, 80, 0.5)" : undefined,
                         }}
                       >
                         <div
                           className="avatar"
                           style={{
-                            border: favorites.includes(user.id)
+                            border: favorites.includes(user._id)
                               ? "2px solid gold"
-                              : user.isAI
+                              : false
                                 ? "2px solid #4CAF50"
                                 : undefined,
-                            backgroundColor: user.isAI ? "#4776e6" : undefined,
-                            color: user.isAI ? "white" : undefined,
+                            backgroundColor: false ? "#4776e6" : undefined,
+                            color: false ? "white" : undefined,
                             position: "relative",
                           }}
-                        >
-                          {getInitials(user.firstName, user.lastName)}
-                          {user.isAI && (
+                        > 
+                        {user.type === "group" ? getInitials(user.name) : "U" } 
+                         
+                          {false && (
                             <div
                               style={{
                                 position: "absolute",
@@ -667,11 +627,11 @@ export default function ChatList() {
                         </div>
                         <div className="contact-info">
                           <div className="contact-name">
-                            {user.firstName} {user.lastName}
-                            {favorites.includes(user.id) && (
+                            {user.type === "group" ? user.name : user.participants.find(p => p.name !== cuser.name)?.name} 
+                            {favorites.includes(user._id) && (
                               <span style={{ color: "gold", marginLeft: "0.25rem" }}>★</span>
                             )}
-                            {user.isAI && (
+                            {false && (
                               <span
                                 style={{
                                   marginLeft: "0.5rem",
@@ -687,29 +647,34 @@ export default function ChatList() {
                               </span>
                             )}
                           </div>
-                          {user.lastMessage && <div className="contact-message">{user.lastMessage}</div>}
-                          <div className="contact-status">{user.online ? "Online" : "Offline"}</div>
+                          {user.name && <div className="contact-message">
+                            {user.type === "group" ? "Group Chat": user.participants.find(p => p.name !== cuser.name)?.email} 
+                            </div>}
+                          <div className="contact-status">{true ? "Online" : "Offline"}</div>
                         </div>
+
+                       {/*  Call button - Made clickable  */}
                         <div style={{ display: "flex", alignItems: "center" }}>
-                          {!user.isAI && (
+                          {!false && (
                             <button
-                              style={{
-                                background: "none",
-                                border: "none",
-                                color: "rgba(255, 255, 255, 0.7)",
-                                cursor: "pointer",
-                                padding: "0.5rem",
+                              style={{background: "none",border: "none",color: "rgba(255, 255, 255, 0.7)",cursor: "pointer",padding: "0.5rem",
                               }}
                               onClick={(e) => {
                                 e.preventDefault()
                                 e.stopPropagation()
-                                handleStartCall(user.id, `${user.firstName} ${user.lastName}`)
+                                var target = user._id
+                                user.type === "group" ? alert("Group call not supported yet") : target = user.participants.find(p => p.name !== cuser.name)?._id || "";
+            
+                                initiateCall(target)
+                
                               }}
                             >
                               <Video size={18} />
                             </button>
                           )}
                         </div>
+                    
+                     
                       </Link>
 
                       {/* Context menu button */}
@@ -725,7 +690,7 @@ export default function ChatList() {
                         onClick={(e) => {
                           e.stopPropagation()
                           e.preventDefault()
-                          const contextMenu = document.getElementById(`context-menu-${user.id}`)
+                          const contextMenu = document.getElementById(`context-menu-${user._id}`)
                           if (contextMenu) {
                             contextMenu.style.display = contextMenu.style.display === "none" ? "block" : "none"
                           }
@@ -736,7 +701,7 @@ export default function ChatList() {
 
                       {/* Context menu */}
                       <div
-                        id={`context-menu-${user.id}`}
+                        id={`context-menu-${user._id}`}
                         style={{
                           display: "none",
                           position: "absolute",
@@ -760,11 +725,11 @@ export default function ChatList() {
                           onClick={(e) => {
                             e.stopPropagation()
                             e.preventDefault()
-                            toggleFavorite(user.id)
-                            document.getElementById(`context-menu-${user.id}`)!.style.display = "none"
+                            toggleFavorite(user._id)
+                            document.getElementById(`context-menu-${user._id}`)!.style.display = "none"
                           }}
                         >
-                          {favorites.includes(user.id) ? "Remove from favorites" : "Add to favorites"}
+                          {favorites.includes(user._id) ? "Remove from favorites" : "Add to favorites"}
                         </div>
                         <div
                           style={{
@@ -776,11 +741,11 @@ export default function ChatList() {
                           onClick={(e) => {
                             e.stopPropagation()
                             e.preventDefault()
-                            toggleArchive(user.id)
-                            document.getElementById(`context-menu-${user.id}`)!.style.display = "none"
+                            toggleArchive(user._id)
+                            document.getElementById(`context-menu-${user._id}`)!.style.display = "none"
                           }}
                         >
-                          {archived.includes(user.id) ? "Unarchive chat" : "Archive chat"}
+                          {archived.includes(user._id) ? "Unarchive chat" : "Archive chat"}
                         </div>
                         <div
                           style={{
@@ -792,8 +757,8 @@ export default function ChatList() {
                           onClick={(e) => {
                             e.stopPropagation()
                             e.preventDefault()
-                            alert(`Muting notifications for ${user.firstName} ${user.lastName}`)
-                            document.getElementById(`context-menu-${user.id}`)!.style.display = "none"
+                            alert(`Muting notifications for ${user.name}`)
+                            document.getElementById(`context-menu-${user._id}`)!.style.display = "none"
                           }}
                         >
                           Mute notifications
@@ -813,19 +778,21 @@ export default function ChatList() {
               </div>
             )}
 
-            {activeTab === "status" && (
+            {activeTab === "friends" && (
               <div>
                 {/* My Status - Made clickable */}
-                <div className="status-section">
-                  <h3 className="status-heading">My Status</h3>
+                <div className="friends-section">
+                  <h3 className="friends-heading">My friends</h3>
                   <div
                     className="contact-item"
-                    style={{
+                    style={{ 
                       backgroundColor: darkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.15)",
                       cursor: "pointer",
                     }}
-                    onClick={() => alert("Add status feature will be implemented soon!")}
+                    onClick={() => setShowAddFriendDialog(true)}
                   >
+                    {showAddFriendDialog && <FriendDialogBox setShowAddFriendDialog = {setShowAddFriendDialog} />}
+                   
                     <div className="avatar" style={{ position: "relative" }}>
                       YO
                       <div
@@ -847,14 +814,50 @@ export default function ChatList() {
                       </div>
                     </div>
                     <div className="contact-info">
-                      <div className="contact-name">My Status</div>
-                      <div className="contact-message">Tap to add status update</div>
+                      <div className="contact-name">My friends</div>
+                      <div className="contact-message">Tap to add new friends</div>
                     </div>
                   </div>
                 </div>
-
-                {/* Recent Updates */}
+                {/* Friends List Section */}
                 <div className="status-section" style={{ marginTop: "1.5rem" }}>
+                  <h3 className="status-heading">Friends</h3>
+                  {friends.length > 0 ? (
+                    friends.map((friend) => (
+                      <div
+                        key={friend.id}
+                        className="contact-item"
+                        style={{
+                          cursor: "pointer",
+                          backgroundColor: darkMode
+                            ? "rgba(255, 255, 255, 0.05)"
+                            : "rgba(255, 255, 255, 0.1)",
+                        }}
+                        onClick={() => alert(`Opening chat with ${friend.name}`)}
+                      >
+                        <div
+                          className="avatar"
+                          style={{
+                            border: "2px solid #4CAF50",
+                            position: "relative",
+                          }}
+                        >
+                          {friend.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="contact-info">
+                          <div className="contact-name">{friend.name}</div>
+                          <div className="contact-message">{friend.email}</div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ opacity: 0.7 }}>No friends to show.</div>
+                  )}
+                </div>
+
+                          
+                {/* Recent Updates */}
+                {/* <div className="status-section" style={{ marginTop: "1.5rem" }}>
                   <h3 className="status-heading">Recent Updates</h3>
                   {statusUpdates
                     .filter((status) => !status.viewed)
@@ -884,10 +887,10 @@ export default function ChatList() {
                         </div>
                       </div>
                     ))}
-                </div>
+                </div> */}
 
                 {/* Viewed Updates */}
-                <div className="status-section" style={{ marginTop: "1.5rem" }}>
+                {/* <div className="status-section" style={{ marginTop: "1.5rem" }}>
                   <h3 className="status-heading">Viewed Updates</h3>
                   {statusUpdates
                     .filter((status) => status.viewed)
@@ -912,7 +915,7 @@ export default function ChatList() {
                         </div>
                       </div>
                     ))}
-                </div>
+                </div> */}
               </div>
             )}
 
@@ -926,8 +929,9 @@ export default function ChatList() {
                     marginBottom: "1rem",
                     cursor: "pointer",
                   }}
-                  onClick={() => alert("Create new group feature will be implemented soon!")}
+                  onClick={() => setShowCreateGroupDialog(true)}
                 >
+                   {showCreateGroupDialog && <GroupDialogBox setShowCreateGroupDialog = {setShowCreateGroupDialog}/>}
                   <div
                     className="avatar"
                     style={{
@@ -981,7 +985,7 @@ export default function ChatList() {
             )}
           </div>
 
-          {/* Logout button - Positioned higher with more space */}
+       {/*   Logout button - Positioned higher with more space */}
           <div style={{ padding: "1rem 0" }}>
             <button
               onClick={handleLogout}
@@ -1020,11 +1024,15 @@ export default function ChatList() {
           </div>
         </div>
       </div>
+      
       {showVideoCall && (
         <VideoCall
           contactName={currentCaller.name}
           contactAvatar="/placeholder.svg?height=80&width=80"
+          localVideoRef={localVideoRef}
+          remoteVideoRef={remoteVideoRef}
           onClose={() => setShowVideoCall(false)}
+          onEndCall={handleEndCall}
         />
       )}
 
@@ -1034,8 +1042,8 @@ export default function ChatList() {
             name: currentCaller.name,
             avatar: "/placeholder.svg?height=80&width=80",
           }}
-          onAccept={handleAcceptCall}
-          onDecline={handleDeclineCall}
+          onAccept={acceptCall}
+          onDecline={rejectCall}
         />
       )}
     </div>

@@ -19,5 +19,11 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ]
+  ],
+  "dependencies": {
+    "events": "^3.3.0",
+    "global": "^4.4.0",
+    "process": "^0.11.10",
+    "util": "^0.12.5"
+  }
 }

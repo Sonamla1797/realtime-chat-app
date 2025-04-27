@@ -6,7 +6,7 @@ import { generateToken } from "../utils/jwt";
 // Signup handler
 export const signup = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, phoneNumber} = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: "All fields are required" });
@@ -19,13 +19,13 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
 
     // Hash password before saving
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user: UserDocument = new User({ name, email, password: hashedPassword });
+    const user: UserDocument = new User({ name, email, password: hashedPassword ,phoneNumber});
     await user.save();
 
     // Fix: Convert `_id` properly
     const userId = user._id.toString();
     const { accessToken, refreshToken } = generateToken({ id: userId, email: user.email });
-
+    console.log("Access Token:", accessToken, userId);  
     return res.status(201).json({
       user: { id: userId, name: user.name, email: user.email },
       accessToken,
@@ -59,7 +59,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     // Fix: Convert `_id` properly
     const userId = user._id.toString();
     const { accessToken, refreshToken } = generateToken({ id: userId, email: user.email });
-
+    
     return res.status(200).json({
       user: { id: userId, name: user.name, email: user.email },
       accessToken,

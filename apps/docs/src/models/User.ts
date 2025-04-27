@@ -6,6 +6,7 @@ export interface UserDocument extends Document {
   name: string;
   email: string;
   password: string;
+  phoneNumber: number
   image: string;
   friends: Types.ObjectId[]; // Add friends field as an array of ObjectIds
 }
@@ -15,6 +16,7 @@ const UserSchema = new Schema<UserDocument>({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  phoneNumber: { type: Number, required: true, unique: true },  
   image: { type: String, required: false },
   friends: [{ type: Schema.Types.ObjectId, ref: "User" }], // Define friends as an array of ObjectIds
 });

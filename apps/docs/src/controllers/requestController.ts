@@ -116,7 +116,7 @@ export const rejectFriendRequest: RequestHandler = async (req: Request, res: Res
 export const getFriendRequests: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const authReq = req as AuthRequest;
-    const {userId} = authReq.body; 
+    const userId = authReq.headers.userId as string; 
 
     const requests = await FriendRequest.find({ receiverId: userId, status: "pending" }).populate(
       "requesterId",

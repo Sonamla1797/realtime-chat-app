@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
 import { Mic, MicOff, Video, VideoOff, PhoneOff, Phone, Users, MoreVertical, MessageSquare, X } from "lucide-react"
+import { on } from "events"
 
 interface VideoCallProps {
   contactName?: string
@@ -13,6 +14,9 @@ interface VideoCallProps {
   groupCall?: boolean
   participants?: { name: string; avatar: string }[]
   audioOnly?: boolean // Add this prop
+  localVideoRef: React.RefObject<HTMLVideoElement>;
+  remoteVideoRef: React.RefObject<HTMLVideoElement>;
+  onEndCall: () => void;
 }
 
 export default function VideoCall({
@@ -22,7 +26,10 @@ export default function VideoCall({
   onClose,
   groupCall = false,
   participants = [],
-  audioOnly = false, // Add default value
+  audioOnly = false,
+  localVideoRef,
+  remoteVideoRef,
+  onEndCall,
 }: VideoCallProps) {
   const [callStatus, setCallStatus] = useState<"ringing" | "connected" | "ended">(isIncoming ? "ringing" : "ringing")
   const [callDuration, setCallDuration] = useState(0)
@@ -33,8 +40,7 @@ export default function VideoCall({
   const [showChat, setShowChat] = useState(false)
   const [message, setMessage] = useState("")
   const [messages, setMessages] = useState<{ sender: string; content: string; timestamp: Date }[]>([])
-  const localVideoRef = useRef<HTMLVideoElement>(null)
-  const remoteVideoRef = useRef<HTMLVideoElement>(null)
+
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // Simulate video streams
@@ -46,7 +52,8 @@ export default function VideoCall({
         .then((stream) => {
           if (localVideoRef.current) {
             localVideoRef.current.srcObject = stream
-
+            console.log("Local video stream started",stream)
+         
             // If audio only, disable video tracks
             if (audioOnly) {
               stream.getVideoTracks().forEach((track) => {
@@ -63,6 +70,8 @@ export default function VideoCall({
           }
         })
     }
+    
+    
   }, [contactAvatar, isIncoming, audioOnly])
 
   // Auto-hide controls after inactivity
@@ -84,7 +93,7 @@ export default function VideoCall({
 
     if (isIncoming && callStatus === "ringing") {
       rejectTimeout = setTimeout(() => {
-        handleEndCall()
+        onEndCall()
       }, 30000) // Auto reject after 30 seconds
     }
 
@@ -109,6 +118,7 @@ export default function VideoCall({
   }, [])
 
   const startCallDurationTimer = () => {
+    
     durationIntervalRef.current = setInterval(() => {
       setCallDuration((prev) => prev + 1)
     }, 1000)
@@ -119,26 +129,13 @@ export default function VideoCall({
     startCallDurationTimer()
 
     // Simulate remote video
-    if (remoteVideoRef.current) {
+    /* if (remoteVideoRef.current) {
       remoteVideoRef.current.poster = contactAvatar
       remoteVideoRef.current.play().catch((e) => console.log("Autoplay prevented:", e))
-    }
+    } */
   }
 
-  const handleEndCall = () => {
-    setCallStatus("ended")
-    if (durationIntervalRef.current) {
-      clearInterval(durationIntervalRef.current)
-    }
-
-    // In a real app, you would close the connection here
-
-    // Delay closing the call UI to show the "Call ended" message
-    setTimeout(() => {
-      onClose()
-    }, 1500)
-  }
-
+  
   const toggleMute = () => {
     setIsMuted(!isMuted)
 
@@ -529,7 +526,7 @@ export default function VideoCall({
                 justifyContent: "center",
                 cursor: "pointer",
               }}
-              onClick={handleEndCall}
+              onClick={onEndCall}
             >
               <PhoneOff size={24} color="white" />
             </button>
@@ -617,7 +614,7 @@ export default function VideoCall({
                 justifyContent: "center",
                 cursor: "pointer",
               }}
-              onClick={handleEndCall}
+              onClick={onEndCall}
             >
               <PhoneOff size={28} color="white" />
             </button>

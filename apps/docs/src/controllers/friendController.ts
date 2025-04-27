@@ -5,11 +5,10 @@ import { AuthRequest } from "../types/types";
 // ✅ Get all friends of a user
 export const getFriends: RequestHandler = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { userId } = req.body;
-
-    // Find the user and populate the friends list
-    const user = await User.findById(userId).populate("friends", "username email");
-
+    const userId = req.headers.userid as string;
+  
+    const user = await User.findById(userId).populate("friends", "name email");
+  
     if (!user) {
       res.status(404).json({ message: "User not found" });
       return;

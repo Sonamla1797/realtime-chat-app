@@ -1,76 +1,61 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
+import axios from "axios"
 
 interface FriendRequest {
-  id: string
-  name: string
-  avatar: string
-  mutualFriends: number
-  timeAgo: string
+  _id: string
+  requesterId: {
+    _id: string
+    username: string
+    email: string
+  }
+  status: string
+  createdAt: string
 }
 
 export default function FriendRequests() {
-  const [requests, setRequests] = useState<FriendRequest[]>([
-    {
-      id: "1",
-      name: "Dexter Amistad",
-      avatar: "/placeholder.svg?height=60&width=60",
-      mutualFriends: 286,
-      timeAgo: "1d",
-    },
-    {
-      id: "2",
-      name: "Alexander Kim",
-      avatar: "/placeholder.svg?height=60&width=60",
-      mutualFriends: 1,
-      timeAgo: "2w",
-    },
-    {
-      id: "3",
-      name: "Sasha Fox",
-      avatar: "/placeholder.svg?height=60&width=60",
-      mutualFriends: 28,
-      timeAgo: "36w",
-    },
-    {
-      id: "4",
-      name: "Khai Duncan",
-      avatar: "/placeholder.svg?height=60&width=60",
-      mutualFriends: 162,
-      timeAgo: "25w",
-    },
-    {
-      id: "5",
-      name: "Calvin Tran",
-      avatar: "/placeholder.svg?height=60&width=60",
-      mutualFriends: 1,
-      timeAgo: "13w",
-    },
-    {
-      id: "6",
-      name: "Dereck Rich",
-      avatar: "/placeholder.svg?height=60&width=60",
-      mutualFriends: 287,
-      timeAgo: "44w",
-    },
-    {
-      id: "7",
-      name: "Julbert Abraham",
-      avatar: "/placeholder.svg?height=60&width=60",
-      mutualFriends: 5,
-      timeAgo: "4w",
-    },
-  ])
+  const [requests, setRequests] = useState<FriendRequest[]>([])
 
-  const handleConfirm = (id: string) => {
-    setRequests(requests.filter((request) => request.id !== id))
+  useEffect(() => {
+    const fetchRequests = async () => {
+      try {
+        const res = await axios.post("http://localhost:5000/api/req/requests", {
+          userId: localStorage.getItem("userId")
+        })
+        setRequests(res.data)
+      } catch (err) {
+        console.error("Error fetching friend requests:", err)
+      }
+    }
+
+    fetchRequests()
+  }, [])
+
+  const handleConfirm = async (requestId: string) => {
+    try {
+      await axios.post("http://localhost:5000/api/req/accept", {
+        requestId,
+        userId: localStorage.getItem("userId"),
+      })
+      setRequests(prev => prev.filter(req => req._id !== requestId))
+    } catch (err) {
+      console.error("Error confirming friend request:", err)
+    }
   }
 
-  const handleDelete = (id: string) => {
-    setRequests(requests.filter((request) => request.id !== id))
+  const handleDelete = async (requestId: string) => {
+    try {
+      await axios.post("http://localhost:5000/api/req/reject", {
+        requestId,
+        userId: localStorage.getItem("userId"),
+      })
+      setRequests(prev => prev.filter(req => req._id !== requestId))
+    } catch (err) {
+      console.error("Error deleting friend request:", err)
+    }
   }
 
   return (
@@ -90,55 +75,33 @@ export default function FriendRequests() {
 
           <div className="friend-requests-list">
             {requests.map((request) => (
-              <div key={request.id} className="contact-item" style={{ alignItems: "flex-start", padding: "1rem" }}>
+              <div key={request._id} className="contact-item" style={{ alignItems: "flex-start", padding: "1rem" }}>
                 <img
-                  src={request.avatar || "/placeholder.svg"}
-                  alt={request.name}
+                  src={"/placeholder.svg"}
+                  alt={request.requesterId.username}
                   className="avatar"
                   style={{ width: "3rem", height: "3rem", marginRight: "1rem" }}
                 />
                 <div className="contact-info">
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <div className="contact-name">{request.name}</div>
-                    <div className="contact-status">{request.timeAgo}</div>
+                    <div className="contact-name">{request.requesterId.username}</div>
+                    <div className="contact-status">{new Date(request.createdAt).toLocaleDateString()}</div>
                   </div>
                   <div className="contact-status" style={{ marginBottom: "0.5rem" }}>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        width: "1.25rem",
-                        height: "1.25rem",
-                        backgroundColor: "#ccc",
-                        borderRadius: "50%",
-                        marginRight: "0.25rem",
-                      }}
-                    ></span>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        width: "1.25rem",
-                        height: "1.25rem",
-                        backgroundColor: "#ccc",
-                        borderRadius: "50%",
-                        marginRight: "0.5rem",
-                        marginLeft: "-0.5rem",
-                        border: "1px solid white",
-                      }}
-                    ></span>
-                    {request.mutualFriends} mutual friends
+                    {request.requesterId.email}
                   </div>
                   <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
                     <button
-                      onClick={() => handleConfirm(request.id)}
+                      onClick={() => handleConfirm(request._id)}
                       className="btn btn-primary"
-                      style={{ width: "50%", backgroundColor: "#4776e6" }}
+                      style={{ width: "50%", backgroundColor: "#4776e6", color: "white", border: "none", padding: "0.5rem", borderRadius: "0.5rem" }}
                     >
                       Confirm
                     </button>
                     <button
-                      onClick={() => handleDelete(request.id)}
+                      onClick={() => handleDelete(request._id)}
                       className="btn btn-outline"
-                      style={{ width: "50%" }}
+                      style={{ width: "50%", backgroundColor: "transparent", color: "#333", border: "1px solid #ccc", padding: "0.5rem", borderRadius: "0.5rem" }}
                     >
                       Delete
                     </button>

@@ -4,25 +4,27 @@ import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { ArrowLeft, Video, Phone, Bot } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import { useAuth } from "../context/AuthContext"
-import { mockPrivateMessages, mockUsers, generateAIResponse } from "../lib/mock-data"
+/* import { mockPrivateMessages, mockUsers, generateAIResponse } from "../lib/mock-data" */
 import { io, type Socket } from "socket.io-client"
 import Message from "./Message"
 import { formatDistanceToNow } from "date-fns"
-import VideoCall from "./VideoCall"
+/* import VideoCall from "./VideoCall" */
 import IncomingCallNotification from "./IncomingCallNotification"
 
 // Define these functions directly if the import is causing issues
-const isPreviewMode = () => {
+const isPreviewMode  = false/* = () => {
   return (
     typeof window !== "undefined" &&
     (window.location.hostname === "localhost" || window.location.hostname.includes("vercel.app"))
   )
-}
+} */
 
 let socket: Socket | null = null
-
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+const token = localStorage.getItem("accessToken");
+const userName = user.name || "User";
 const getSocket = () => {
   if (!socket) {
     socket = io("http://localhost:5000", {
@@ -70,30 +72,46 @@ const createMockSocket = () => {
 }
 
 interface MessageType {
-  id: string
-  sender: string
-  receiver?: string
   content: string
   timestamp: string
+  sender: string
 }
-
-interface User {
+/* interface User {
   id: string
-  firstName: string
-  lastName: string
+    firstName: string
+    lastName: string
   online: boolean
   isAI?: boolean
+} */
+  interface Participant{
+    _id: string
+    name: string
+    email: string
+  }
+
+interface Reciever{
+  id: string
+  name: string
+  type: string
+  participants: Participant[]
+
+
 }
 
+
 export default function ChatWindow() {
+
   console.log("ChatWindow component rendering")
-  const { userId } = useParams<{ userId: string }>()
+  const {userId} = useParams();
+
+const chatId = userId || null ;
   const [message, setMessage] = useState("")
   const [messages, setMessages] = useState<MessageType[]>([])
-  const [receiver, setReceiver] = useState<User | null>(null)
+  const [receiver, setReceiver] = useState<Reciever>()
+/*   const [participants, setParticipants] = useState<User[]>([]) */
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [isTyping, setIsTyping] = useState(false)
+/*   const [isTyping, setIsTyping] = useState(false) */
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { user, isAuthenticated } = useAuth()
   const navigate = useNavigate()
@@ -102,11 +120,13 @@ export default function ChatWindow() {
   const [showVideoCall, setShowVideoCall] = useState(false)
   const [showIncomingCall, setShowIncomingCall] = useState(false)
   // Add audioOnly parameter to state variables
-  const [callIsAudioOnly, setCallIsAudioOnly] = useState(false)
+/*   const [callIsAudioOnly, setCallIsAudioOnly] = useState(false) */
 
-  console.log("ChatWindow params:", { userId, isAuthenticated, user })
+  console.log("ChatWindow params:", { chatId, isAuthenticated, user })
 
   useEffect(() => {
+    fetchMessages()
+    fetchUserDetails()
     console.log("ChatWindow useEffect running")
 
     if (!isAuthenticated || !user) {
@@ -115,42 +135,38 @@ export default function ChatWindow() {
       return
     }
 
-    if (!userId) {
-      console.log("No userId provided")
+    if (!chatId) {
+      console.log("No chatId provided")
       setError("No user selected")
       setLoading(false)
       return
     }
 
     // Fetch user details and messages
-    fetchUserDetails()
-    fetchMessages()
+
+
 
     // Set up socket connection
     try {
-      const socket = isPreviewMode() ? createMockSocket() : getSocket()
-
-      socket.on("privateMessage", (newMessage: MessageType) => {
-        console.log("Received private message:", newMessage)
-        if (
-          userId &&
-          ((newMessage.sender === userId && newMessage.receiver === user.id) ||
-            (newMessage.sender === user.id && newMessage.receiver === userId))
-        ) {
-          setMessages((prev) => [...prev, newMessage])
-        }
-      })
+      const socket = isPreviewMode ? createMockSocket() : getSocket()
+      socket.connect();
+      socket.emit("joinChat", chatId)
+      socket.on("message", (message) => {
+        setMessages((prev) => [...prev, message]);
+      });
 
       return () => {
+        socket.off("message")
+        socket.emit("leaveChat", chatId);
         console.log("Cleaning up socket listeners")
-        socket.off("privateMessage")
+   
       }
     } catch (error) {
       console.error("Socket setup error:", error)
       setError("Failed to connect to chat server")
       setLoading(false)
     }
-  }, [isAuthenticated, user, userId, navigate])
+  }, [chatId])
 
   // Remove or comment out this useEffect to stop simulated incoming calls
   // useEffect(() => {
@@ -175,20 +191,22 @@ export default function ChatWindow() {
   }
 
   const fetchUserDetails = async () => {
-    console.log("Fetching user details for userId:", userId)
+    console.log("Fetching user details for chatId:", chatId)
     try {
-      if (isPreviewMode()) {
-        console.log("Using mock data for user details")
-        const mockUser = mockUsers.find((u) => u.id === userId)
-        console.log("Found mock user:", mockUser)
-        setReceiver(mockUser || null)
-        setLoading(false)
-        return
-      }
+      
+      
+      
 
-      const response = await fetch(`http://localhost:5000/api/users/${userId}`, {
+      const response = await fetch(`http://localhost:5000/api/chats/${chatId}`, {
         credentials: "include",
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          
+        }
       })
+      console.log("Response status:", response.status)  
 
       if (response.ok) {
         const data = await response.json()
@@ -200,37 +218,33 @@ export default function ChatWindow() {
     } catch (error) {
       console.error("Error fetching user details:", error)
       // Fallback to mock data
-      const mockUser = mockUsers.find((u) => u.id === userId)
-      setReceiver(mockUser || null)
+
     } finally {
       setLoading(false)
     }
   }
 
   const fetchMessages = async () => {
-    console.log("Fetching messages for userId:", userId)
+    console.log("Fetching messages for chatId:", chatId)
     try {
-      if (isPreviewMode()) {
-        console.log("Using mock data for messages")
-        // Check if userId exists in mockPrivateMessages
-        if (userId && userId in mockPrivateMessages) {
-          const mockMsgs = mockPrivateMessages[userId as keyof typeof mockPrivateMessages]
-          console.log("Found mock messages:", mockMsgs)
-          setMessages(mockMsgs)
-        } else {
-          console.log("No mock messages found for userId:", userId)
+      console.log("No mock messages found for chatId:", chatId)
           setMessages([])
-        }
-        return
-      }
-
-      const response = await fetch(`http://localhost:5000/api/messages/${userId}`, {
-        credentials: "include",
+      const response = await fetch(`http://localhost:5000/api/messages/${chatId}`, {
+        
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          
+        },
       })
+      console.log("Response status:", response.status);
 
       if (response.ok) {
         const data = await response.json()
+        console.log("Fetched messages:", data)
         setMessages(data)
+        
       } else {
         console.error("Failed to fetch messages:", response.status)
         setError("Failed to load messages")
@@ -238,69 +252,32 @@ export default function ChatWindow() {
     } catch (error) {
       console.error("Error fetching messages:", error)
       // Fallback to mock data
-      if (userId && userId in mockPrivateMessages) {
-        const mockMsgs = mockPrivateMessages[userId as keyof typeof mockPrivateMessages]
-        setMessages(mockMsgs)
-      } else {
-        setMessages([])
-      }
+      setMessages([])
     }
   }
 
   const sendMessage = (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!message.trim() || !user || !userId) return
+    if (!message.trim() || !user || !chatId) return
 
     try {
       // Create the new message
       const newMessage = {
-        id: `msg${Date.now()}`,
-        sender: user.id,
-        receiver: userId,
         content: message,
         timestamp: new Date().toISOString(),
+        sender: userName,
       }
 
       // Add the message to the UI
-      setMessages((prev) => [...prev, newMessage])
+      
+      socket?.emit("sendMessage", { chatId, ...newMessage });
 
-      // Check if this is the AI Assistant and generate a response
-      if (receiver?.isAI || userId === "ai-assistant") {
-        // Show typing indicator
-        setIsTyping(true)
+      
+  
 
-        // Simulate AI thinking time (0.5-2 seconds)
-        const thinkingTime = 500 + Math.random() * 1500
-
-        setTimeout(() => {
-          // Generate AI response
-          const aiResponse = generateAIResponse(message)
-
-          // Create AI response message
-          const aiMessage = {
-            id: `ai${Date.now()}`,
-            sender: userId,
-            receiver: user.id,
-            content: aiResponse,
-            timestamp: new Date().toISOString(),
-          }
-
-          // Add AI response to messages
-          setMessages((prev) => [...prev, aiMessage])
-          setIsTyping(false)
-        }, thinkingTime)
-      } else {
-        // For regular users, use socket
-        const socket = isPreviewMode() ? createMockSocket() : getSocket()
-
-        // Send private message to server
-        socket.emit("sendPrivateMessage", {
-          content: message,
-          sender: user.id,
-          receiver: userId,
-        })
-      }
+ 
+      
     } catch (error) {
       console.error("Error sending message:", error)
       setError("Failed to send message")
@@ -309,16 +286,16 @@ export default function ChatWindow() {
     setMessage("")
   }
 
-  const getInitials = (firstName: string, lastName: string) => {
-    return `${firstName.charAt(0)}${lastName.charAt(0)}`
+  const getInitials = (name: string) => {
+    return `${name.charAt(0)}`
   }
 
   // Add video call handlers
   // Update the handleStartCall function to accept a parameter
-  const handleStartCall = (audioOnly = false) => {
+/*   const handleStartCall = (audioOnly = false) => {
     setCallIsAudioOnly(audioOnly)
     setShowVideoCall(true)
-  }
+  } */
 
   // Update the handleAcceptCall function to maintain the audio/video mode
   const handleAcceptCall = () => {
@@ -365,7 +342,7 @@ export default function ChatWindow() {
     )
   }
 
-  const isAIAssistant = receiver?.isAI || userId === "ai-assistant"
+
 
   return (
     <div className="chat-container">
@@ -395,13 +372,14 @@ export default function ChatWindow() {
                   className="avatar"
                   style={{
                     position: "relative",
-                    backgroundColor: isAIAssistant ? "#4776e6" : undefined,
-                    color: isAIAssistant ? "white" : undefined,
-                    border: isAIAssistant ? "2px solid #4CAF50" : undefined,
+                    backgroundColor: "#4776e6",
+                    color: "white" ,
+                    border: "2px solid #4CAF50"
                   }}
                 >
-                  {getInitials(receiver.firstName, receiver.lastName)}
-                  {isAIAssistant && (
+                  {receiver.type === "group" ? getInitials(receiver.name) : "U" } 
+                  
+                  {/* {isAIAssistant && (
                     <div
                       style={{
                         position: "absolute",
@@ -419,12 +397,12 @@ export default function ChatWindow() {
                     >
                       <Bot size={8} />
                     </div>
-                  )}
+                  )} */}
                 </div>
                 <div>
                   <div className="contact-name">
-                    {receiver.firstName} {receiver.lastName}
-                    {isAIAssistant && (
+                  {receiver.type === "group" ? receiver.name : receiver.participants.find(p => p.name !== userName)?.name} 
+                    {/* {isAIAssistant && (
                       <span
                         style={{
                           marginLeft: "0.5rem",
@@ -438,11 +416,11 @@ export default function ChatWindow() {
                       >
                         AI
                       </span>
-                    )}
+                    )} */}
                   </div>
-                  <div className="contact-status">
+                  {/* <div className="contact-status">
                     {isTyping ? "Typing..." : receiver.online ? "Online" : "Offline"}
-                  </div>
+                  </div> */}
                 </div>
               </div>
             ) : (
@@ -451,7 +429,7 @@ export default function ChatWindow() {
 
             {/* Add video call button */}
             {/* Add the audio call button next to the video call button in the header */}
-            {!isAIAssistant && (
+            {/* {!isAIAssistant && (
               <div style={{ marginLeft: "auto", display: "flex", gap: "0.5rem" }}>
                 <button className="back-button" onClick={() => handleStartCall(true)}>
                   <Phone size={24} />
@@ -460,23 +438,23 @@ export default function ChatWindow() {
                   <Video size={24} />
                 </button>
               </div>
-            )}
+            )} */}
           </div>
 
           <div className="messages-area">
             {messages.length > 0 ? (
               messages.map((msg) => (
                 <Message
-                  key={msg.id}
                   content={msg.content}
-                  timestamp={formatDistanceToNow(new Date(msg.timestamp), { addSuffix: true })}
-                  isOwnMessage={user?.id === msg.sender}
+                  timestamp={msg.timestamp}
+                  isOwnMessage={userName === msg.sender}
+                  sender={msg.sender}
                 />
               ))
             ) : (
               <div className="text-center text-white">No messages yet. Start the conversation!</div>
             )}
-            {isTyping && (
+            {/* {isTyping && (
               <div
                 style={{
                   display: "flex",
@@ -532,7 +510,7 @@ export default function ChatWindow() {
                   ></span>
                 </div>
               </div>
-            )}
+            )} */}
             <div ref={messagesEndRef} />
           </div>
 
@@ -541,7 +519,7 @@ export default function ChatWindow() {
               type="text"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder={isAIAssistant ? "Ask me anything..." : "Type a message"}
+              placeholder={"Type a message" }
               className="form-input"
             />
             <button type="submit" className="btn btn-primary" style={{ width: "auto" }}>
@@ -553,20 +531,20 @@ export default function ChatWindow() {
 
       {/* Add video call components */}
       {/* Update the VideoCall component to pass the audioOnly parameter */}
-      {showVideoCall && (
+      {/* {showVideoCall && (
         <VideoCall
-          contactName={receiver ? `${receiver.firstName} ${receiver.lastName}` : "User"}
+          contactName={receiver ? `${receiver.name} ` : "User"}
           contactAvatar="/placeholder.svg?height=80&width=80"
           onClose={() => setShowVideoCall(false)}
           audioOnly={callIsAudioOnly}
         />
-      )}
+      )} */}
 
       {/* Update the IncomingCallNotification to include the call type */}
       {showIncomingCall && (
         <IncomingCallNotification
           caller={{
-            name: receiver ? `${receiver.firstName} ${receiver.lastName}` : "User",
+            name: receiver ? `${receiver.name} ` : "User",
             avatar: "/placeholder.svg?height=80&width=80",
           }}
           onAccept={handleAcceptCall}

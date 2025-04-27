@@ -5,7 +5,7 @@ import { AuthRequest } from "../types/types";
 // ✅ Send a Message
 export const sendMessage: RequestHandler = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { userId, chatId, content } = req.body;
+    const { sender, chatId, content } = req.body;
 
     if (!chatId || !content) {
       res.status(400).json({ message: "Chat ID and content are required" });
@@ -15,7 +15,7 @@ export const sendMessage: RequestHandler = async (req: AuthRequest, res: Respons
     // Create and save the new message
     const message = new Message({
       chatId,
-      sender: userId,
+      sender: sender,
       content,
     });
 
