@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-
+const baseURL = import.meta.env.VITE_API_BASE_URL;
 export default function Signup() {
   const [formData, setFormData] = useState({
     firstName: '',
@@ -44,7 +44,7 @@ export default function Signup() {
     const name = `${firstName.trim()} ${lastName.trim()}`;
 
     try {
-      const res = await fetch('http://localhost:5000/api/auth/signup', {
+      const res = await fetch(`${baseURL}/api/auth/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

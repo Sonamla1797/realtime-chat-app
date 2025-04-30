@@ -10,12 +10,12 @@ import IncomingCallNotification from "./IncomingCallNotification"
 //import { dgroup , dstatus} from "./dummy";
 import { FriendDialogBox, GroupDialogBox } from "./dialogbox/DialogBox"
 import { User, Friends, Group } from "../type"
-import setupLocalSD from "./localVid"
+const baseURL = import.meta.env.VITE_API_BASE_URL;
 
 import { getSocket } from "../sockets/socket"
 import SimplePeer from "simple-peer"
 import Header from "./chatComponents/Header"
-import { set } from "date-fns"
+
 
 // Define isPreviewMode directly in this file if the import is causing issues
 /* const isPreviewMode = () => 
@@ -27,6 +27,7 @@ import { set } from "date-fns"
  */
 
 export default function ChatList() {
+  
   const [activeTab, setActiveTab] = useState("chats")
   const [users, setUsers] = useState<User[]>([])
   //const [statusUpdates, setStatusUpdates] = useState<StatusUpdate[]>([])
@@ -52,7 +53,7 @@ export default function ChatList() {
 
   const localVideoRef = useRef<HTMLVideoElement>(null!) 
   const remoteVideoRef = useRef<HTMLVideoElement>(null!) 
-  
+
   const [incomingCall, setIncomingCall] = useState<{ from: string; signal: any } | null>(null)
   const[showIncomingCall, setShowIncomingCall] = useState(false); // Show incoming call modal/notification  
 
@@ -65,28 +66,56 @@ export default function ChatList() {
 
 
   useEffect(() => {
-    socket.emit("register", { userId: cuser.id });
+    const getMedia = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
   
-    socket.on("incoming-call", ({ from, signal }) => {
-      setIncomingCall({ from, signal });
-      setShowIncomingCall(true);
-    });
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+        }
   
-    socket.on("answer", ({ signal }) => {
-      // When the caller receives the answer, complete the handshake
-      peerRef.current?.signal(signal);
-    });
+        const peer = new SimplePeer({
+          initiator: true,
+          trickle: false,
+        });
   
-    socket.on("reject-call", () => {
-      alert("Call was rejected.");
-      setShowVideoCall(false);
-    });
+        // ✅ Manually add tracks
+        stream.getTracks().forEach(track => peer.addTrack(track, stream));
+  
+        socket.emit("register", { userId: cuser.id });
+  
+        socket.on("incoming-call", ({ from, signal }) => {
+          peer.signal(signal); // VERY IMPORTANT
+          setIncomingCall({
+            from,
+            signal,
+          });
+          setShowIncomingCall(true);
+          console.log("Incoming call from:", from);
+        });
+  
+        socket.on("answer", ({ signal }) => {
+          peer?.signal(signal); // Answer received, signal back
+        });
+  
+        socket.on("reject-call", () => {
+          alert("Call was rejected.");
+          setShowVideoCall(false);
+        });
+        
+      } catch (err) {
+        console.error("Error getting media:", err);
+      }
+    };
+  
+    getMedia();
   
     return () => {
       socket.off("incoming-call");
       socket.off("answer");
       socket.off("reject-call");
     };
+  
   }, []);
   
   
@@ -130,7 +159,7 @@ export default function ChatList() {
         return;
       }
   
-      const response = await fetch("http://localhost:5000/api/chats/user", {
+      const response = await fetch(`${baseURL}/api/chats/user`, {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -171,7 +200,7 @@ export default function ChatList() {
         return;
       }
   
-      const response = await fetch("http://localhost:5000/api/friend/friends", {
+      const response = await fetch(`${baseURL}/api/friend/friends`, {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -195,7 +224,7 @@ export default function ChatList() {
     try {
       
 
-      const response = await fetch("http://localhost:5000/api/users", {
+      const response = await fetch("`${baseURL}/api/users", {
         credentials: "include",
       })
 
@@ -279,21 +308,23 @@ export default function ChatList() {
     setShowVideoCall(true)
   } */
     const initiateCall = async (targetChatId: string) => {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const stream: MediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
-        localVideoRef.current.play().catch((error) => {
-          console.error("Local video play prevented:", error);
-        });
       }
-     
-      peerRef.current = new SimplePeer({
+    
+      const peer: SimplePeer.Instance = new SimplePeer({
         initiator: true,
         trickle: false,
-        stream: stream,
       });
     
-      peerRef.current.on("signal", (data) => {
+      // ✅ Manually add tracks
+      stream.getTracks().forEach(track => peer.addTrack(track, stream));
+    
+      setShowVideoCall(true);
+    
+      peer.on("signal", (data) => {
         socket.emit("call-user", {
           to: targetChatId,
           from: cuser.id,
@@ -301,60 +332,46 @@ export default function ChatList() {
         });
       });
     
-      peerRef.current?.on("stream", (remoteStream) => {
-        if (remoteVideoRef.current) {
-          console.log("Remote stream received:", remoteStream);
-          remoteVideoRef.current.srcObject = remoteStream;
-          remoteVideoRef.current.play().catch((error) => {
-            console.error("Remote video play prevented:", error);
-          });
+      peer.on("stream", (remoteStream) => {
+        if (remoteVideoRef.current && remoteStream) {
+          console.log("Received remote track:", remoteStream);
+          remoteVideoRef.current.srcObject = remoteStream ;
         }
       });
-    
-      peerRef.current.on('connect', () => {
-        console.log('Connected! successful handshake');
-      });
-    
-      setShowVideoCall(true);
     };
     
     const acceptCall = async (): Promise<void> => {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const stream: MediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
       }
     
-      peerRef.current = new SimplePeer({
-        initiator: false,
+      const peer: SimplePeer.Instance = new SimplePeer({
+        initiator: false, // You are answering
         trickle: false,
-        stream: stream,
       });
     
-      peerRef.current.on("signal", (signalData) => {
+      // ✅ Manually add tracks
+      stream.getTracks().forEach(track => peer.addTrack(track, stream));
+    
+      peer.on("signal", (signalData: SimplePeer.SignalData) => {
         socket.emit("answer", {
           to: incomingCall?.from || "",
           signal: signalData,
         });
       });
     
-      peerRef.current?.on("stream", (remoteStream) => {
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = remoteStream;
-          remoteVideoRef.current.play().catch((error) => {
-            console.error("Remote video play prevented:", error);
-          });
+      if (incomingCall?.signal) {
+        peer.signal(incomingCall.signal);
+      }
+    
+      peer.on("stream", (remoteStream) => {
+        if (remoteVideoRef.current && remoteStream) {
+          console.log("Received remote track:", remoteStream);
+          remoteVideoRef.current.srcObject = remoteStream ;
         }
       });
-    
-      peerRef.current.on('connect', () => {
-        console.log('Connected!');
-      });
-    
-      // VERY important: apply caller's offer
-      if (incomingCall?.signal) {
-        peerRef.current.signal(incomingCall.signal);
-      }
     
       setShowIncomingCall(false);
       setShowVideoCall(true);

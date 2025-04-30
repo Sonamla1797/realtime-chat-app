@@ -10,46 +10,16 @@ interface IncomingCallNotificationProps {
   }
   onAccept: () => void
   onDecline: () => void
-  isAudioCall?: boolean // Add this prop
+  isAudioCall?: boolean
 }
 
 export default function IncomingCallNotification({
   caller,
   onAccept,
   onDecline,
-  isAudioCall = false, // Add default value
+  isAudioCall = false,
 }: IncomingCallNotificationProps) {
   const [isRinging, setIsRinging] = useState(true)
-  const [ringtoneAudio] = useState<HTMLAudioElement | null>(
-    typeof window !== "undefined" ? new Audio("/ringtone.mp3") : null,
-  )
-
-  // Play ringtone
-  useEffect(() => {
-    if (ringtoneAudio) {
-      ringtoneAudio.loop = true
-      ringtoneAudio.play().catch((e) => console.log("Autoplay prevented:", e))
-
-      // Vibration pattern if supported
-      if (navigator.vibrate) {
-        const vibrateInterval = setInterval(() => {
-          navigator.vibrate([200, 100, 200])
-        }, 1000)
-
-        return () => {
-          clearInterval(vibrateInterval)
-          ringtoneAudio.pause()
-          ringtoneAudio.currentTime = 0
-          navigator.vibrate(0) // Stop vibration
-        }
-      }
-
-      return () => {
-        ringtoneAudio.pause()
-        ringtoneAudio.currentTime = 0
-      }
-    }
-  }, [ringtoneAudio])
 
   // Auto-hide after 30 seconds
   useEffect(() => {

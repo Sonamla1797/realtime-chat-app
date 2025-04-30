@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 import axios from "axios"
-
+const baseURL = import.meta.env.VITE_API_BASE_URL;
 interface FriendRequest {
   _id: string
   requesterId: {
@@ -22,7 +22,7 @@ export default function FriendRequests() {
   useEffect(() => {
     const fetchRequests = async () => {
       try {
-        const res = await axios.post("http://localhost:5000/api/req/requests", {
+        const res = await axios.post(`${baseURL}/api/req/requests`, {
           userId: localStorage.getItem("userId")
         })
         setRequests(res.data)
@@ -36,7 +36,7 @@ export default function FriendRequests() {
 
   const handleConfirm = async (requestId: string) => {
     try {
-      await axios.post("http://localhost:5000/api/req/accept", {
+      await axios.post(`${baseURL}/api/req/accept`, {
         requestId,
         userId: localStorage.getItem("userId"),
       })
@@ -48,7 +48,7 @@ export default function FriendRequests() {
 
   const handleDelete = async (requestId: string) => {
     try {
-      await axios.post("http://localhost:5000/api/req/reject", {
+      await axios.post(`${baseURL}/api/req/reject`, {
         requestId,
         userId: localStorage.getItem("userId"),
       })

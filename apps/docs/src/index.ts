@@ -21,9 +21,10 @@ const app = express();
 // Middleware
 app.use(express.json()); // Parse JSON request body
 app.use(cors({
-  origin: "http://localhost:5173",  // your React frontend origin
+  origin: 'http://localhost:5173',  // your React frontend origin
   credentials: true,
 }));
+
 
 // Database Connection
 connectDB();
@@ -149,8 +150,8 @@ app.get("/", (req, res) => {
 });
 
 // Start Server
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-});
-                            
+const PORT =  5000;
+const HOST = '172.20.10.7';
+server.listen(PORT , () => {
+  console.log("Server is running on http://0.0.0.0:5000");
+});                 
