@@ -55,7 +55,7 @@ export interface Group {
   lastActivity: string
 }
 export interface Friends {
-  id: string
+  _id: string
   name: string
   email: string
 }

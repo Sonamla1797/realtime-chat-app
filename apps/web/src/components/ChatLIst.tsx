@@ -12,6 +12,7 @@ import { FriendDialogBox, GroupDialogBox } from "./dialogbox/DialogBox"
 import { User, Friends, Group } from "../type"
 const baseURL = import.meta.env.VITE_API_BASE_URL;
 
+
 import { getSocket } from "../sockets/socket"
 import SimplePeer from "simple-peer"
 import Header from "./chatComponents/Header"
@@ -220,6 +221,92 @@ export default function ChatList() {
       console.error("Error fetching friends:", error);
     }
   }
+  const handleAddFriend = async (friendId: string) => {
+    try {                 
+      const token = localStorage.getItem("accessToken");
+      const userId = cuser.id;
+
+      if (!userId) {
+        console.error("User ID not found in localStorage.");
+        return;
+      }
+  
+      const response = await fetch(`${baseURL}/api/friend/add`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "userId": userId,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ friendId }),
+        credentials: "include",
+        
+      });
+  
+      if (!response.ok) {
+        throw new Error("Failed to add friend");
+      }
+      
+      const updatedFriendsList = await response.json();
+      setFriends(updatedFriendsList);
+    }
+    catch (error) {
+      console.error("Error adding friend:", error);
+    }
+  }
+  const handleStartChat = async (type:string , participants:string[]) => {
+      try {
+        console.log("Starting chat with participants:", participants);
+        const token = localStorage.getItem("accessToken");
+        const userId = cuser.id;
+        
+
+        if (!userId) {
+          console.error("User ID not found in localStorage.");
+          return;
+        }
+    
+        const response = await fetch(`${baseURL}/api/chats/create`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "userId": userId,
+            "Content-Type": "application/json", 
+          },
+          body: JSON.stringify({ 
+            userId,
+            participants,
+            type
+            
+           }),
+          credentials: "include",
+          
+        });
+    
+        if (!response.ok) {
+          throw new Error("Failed to start chat");
+        }
+        /* const rawChat = await response.json();
+
+        const newChat: User = {
+          _id: rawChat._id,
+          name: rawChat.name || "",
+          type: rawChat.type,
+          participants: rawChat.participants || [],
+          messages: rawChat.messages || [],
+          createdAt: rawChat.createdAt || new Date().toISOString(),
+          updatedAt: rawChat.updatedAt || new Date().toISOString(),
+        };    
+
+        setUsers((prevUsers) => [...prevUsers, newChat]); */
+        fetchChats(); // Refresh the chat list
+        setActiveTab("chats");
+      } catch (error) {
+        console.error("Error starting chat:", error);
+      }
+    }
+
+
 /*   const fetchUsers = async () => {
     try {
       
@@ -478,7 +565,7 @@ export default function ChatList() {
                 fontWeight: "bold",
               }}
             >
-              STATUS
+              FRIENDS
             </div>
             <div
               className={`tab ${activeTab === "groups" ? "active" : ""}`}
@@ -765,21 +852,48 @@ export default function ChatList() {
                           {archived.includes(user._id) ? "Unarchive chat" : "Archive chat"}
                         </div>
                         <div
-                          style={{
-                            padding: "0.5rem",
-                            color: darkMode ? "white" : "#333",
-                            cursor: "pointer",
-                            whiteSpace: "nowrap",
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            e.preventDefault()
-                            alert(`Muting notifications for ${user.name}`)
-                            document.getElementById(`context-menu-${user._id}`)!.style.display = "none"
-                          }}
-                        >
-                          Mute notifications
-                        </div>
+                            style={{
+                              padding: "0.5rem",
+                              color: darkMode ? "white" : "#333",
+                              cursor: "pointer",
+                              whiteSpace: "nowrap",
+                            }}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+
+                              // Hide context menu
+                              const menu = document.getElementById(`context-menu-${user._id}`);
+                              if (menu) menu.style.display = "none";
+
+                              try {
+                                const token = localStorage.getItem("accessToken");
+
+                                const response = await fetch(`${baseURL}/api/chats/${user._id}`, {
+                                  method: "DELETE", // Change to DELETE if your backend expects it
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                    "Authorization": `Bearer ${token}`,
+                                    "userId": cuser.id,
+                                  }, 
+                                  body: JSON.stringify({ userId: cuser.id }), // Include userId in the body if needed
+                                  
+                                });
+
+                                if (!response.ok) {
+                                  throw new Error("Failed to remove friend");
+                                }
+
+                                // Optional: update local UI
+                                setUsers((prev) => prev.filter((u) => u._id !== user._id));
+                              } catch (error) {
+                                console.error("Error removing friend:", error);
+                              }
+                            }}
+                          >
+                            Remove Chat
+                          </div>
+
                       </div>
                     </div>
                   ))
@@ -811,7 +925,7 @@ export default function ChatList() {
                     {showAddFriendDialog && <FriendDialogBox setShowAddFriendDialog = {setShowAddFriendDialog} />}
                    
                     <div className="avatar" style={{ position: "relative" }}>
-                      YO
+                      
                       <div
                         style={{
                           position: "absolute",
@@ -850,7 +964,7 @@ export default function ChatList() {
                             ? "rgba(255, 255, 255, 0.05)"
                             : "rgba(255, 255, 255, 0.1)",
                         }}
-                        onClick={() => alert(`Opening chat with ${friend.name}`)}
+                        onClick={() => handleStartChat("one-on-one", [friend._id, cuser.id])}
                       >
                         <div
                           className="avatar"
