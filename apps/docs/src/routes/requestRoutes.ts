@@ -13,10 +13,10 @@ const router: Router = Router();
 router.post('/request', verifyToken, sendFriendRequest);
 
 // Route to accept a friend request
-router.post('/accept', verifyToken, acceptFriendRequest);
+router.post('/accept/:requestId', verifyToken, acceptFriendRequest);
 
 // Route to reject a friend request
-router.post('/reject', verifyToken, rejectFriendRequest);
+router.post('/reject/:requestId', verifyToken, rejectFriendRequest);
 
 // Route to get all pending friend requests
 router.get('/requests', verifyToken, getFriendRequests);

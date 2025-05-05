@@ -3,18 +3,21 @@ import { User } from "../models/User";
 import { FriendRequest } from "../models/Request";
 import { AuthRequest } from "../types/types";
 
+
+
+
 // ✅ Send a friend request
 export const sendFriendRequest: RequestHandler = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const authReq = req 
 
-    const { receiverId } = authReq.body;
+    const { receiverEmail } = authReq.body;
     const {requesterId} = authReq.body; 
 
 
     // Ensure both users exist
+    const receiver = await User.findOne({ email: receiverEmail });
     const requester = await User.findById(requesterId);
-    const receiver = await User.findById(receiverId);
 
     if (!receiver) {
       res.status(404).json({ message: "Receiver not found" });
@@ -22,14 +25,14 @@ export const sendFriendRequest: RequestHandler = async (req: AuthRequest, res: R
     }
 
     // Check if request already exists
-    const existingRequest = await FriendRequest.findOne({ requesterId, receiverId });
+    const existingRequest = await FriendRequest.findOne({ requesterId, receiverId: receiver._id });
     if (existingRequest) {
       res.status(400).json({ message: "Friend request already sent" });
       return;
     }
 
     // Create and save friend request
-    const newRequest = new FriendRequest({ requesterId, receiverId });
+    const newRequest = new FriendRequest({ requesterId, receiverId: receiver._id });
     await newRequest.save();
 
     res.status(201).json({ message: "Friend request sent" });
@@ -42,9 +45,8 @@ export const sendFriendRequest: RequestHandler = async (req: AuthRequest, res: R
 export const acceptFriendRequest: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const authReq = req as AuthRequest;
-    const { requestId } = authReq.body;
-    const {userId} = authReq.body; 
-
+    const { requestId } = req.params;
+    const userId = req.headers.userid as string; // Extract userId from headers
     const request = await FriendRequest.findById(requestId);
     if (!request) {
       res.status(404).json({ message: "Request not found" });
@@ -71,17 +73,25 @@ export const acceptFriendRequest: RequestHandler = async (req: Request, res: Res
     }
 
     requester.friends.push(receiver._id);
-    receiver.friends.push(requester._id);
-
     await requester.save();
-    await receiver.save();
+    console.log("friend added");
 
+    receiver.friends.push(requester._id);
+    console.log("Receiver before save:", receiver);
+      try {
+        await receiver.save();
+        console.log("friend added2");
+      } catch (err) {
+        console.error("❌ Error saving receiver:", err);
+        
+      }
     // Update request status
     request.status = "accepted";
     await request.save();
-
+    console.log("friend added3")
     res.status(200).json({ message: "Friend request accepted" });
   } catch (error) {
+    console.error("Error accepting friend request:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -90,8 +100,8 @@ export const acceptFriendRequest: RequestHandler = async (req: Request, res: Res
 export const rejectFriendRequest: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const authReq = req as AuthRequest;
-    const { requestId } = authReq.body;
-    const {userId} = authReq.body; 
+    const { requestId } = req.params;
+    const userId = req.headers.userid as string; // Extract userId from headers
 
     const request = await FriendRequest.findById(requestId);
     if (!request) {
@@ -115,12 +125,15 @@ export const rejectFriendRequest: RequestHandler = async (req: Request, res: Res
 // ✅ Get all pending friend requests
 export const getFriendRequests: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
-    const authReq = req as AuthRequest;
-    const userId = authReq.headers.userId as string; 
+  
+
+
+    const userId = req.headers.userid as string;
+ 
 
     const requests = await FriendRequest.find({ receiverId: userId, status: "pending" }).populate(
       "requesterId",
-      "username email"
+      "name email"
     );
 
     res.status(200).json(requests);

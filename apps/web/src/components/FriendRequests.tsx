@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
-import axios from "axios"
+
 const baseURL = import.meta.env.VITE_API_BASE_URL;
+const token = localStorage.getItem("accessToken");
+const cuser = JSON.parse(localStorage.getItem("user") || "{}");
 interface FriendRequest {
   _id: string
   requesterId: {
     _id: string
-    username: string
+    name: string
     email: string
   }
   status: string
@@ -18,14 +20,29 @@ interface FriendRequest {
 
 export default function FriendRequests() {
   const [requests, setRequests] = useState<FriendRequest[]>([])
-
+  const getInitials = (userName: string) => {
+    return `${userName.charAt(0)}`
+  }
   useEffect(() => {
     const fetchRequests = async () => {
       try {
-        const res = await axios.post(`${baseURL}/api/req/requests`, {
-          userId: localStorage.getItem("userId")
-        })
-        setRequests(res.data)
+        const res = await fetch(`${baseURL}/api/req/requests`, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "userId": cuser.id,
+          },
+          credentials: "include",
+          
+        });
+        
+   
+        const response = await res.json();
+
+        /* const res = await axios.post(`${baseURL}/api/req/requests`, {
+          userId:
+        }) */
+        setRequests(response)
       } catch (err) {
         console.error("Error fetching friend requests:", err)
       }
@@ -36,10 +53,17 @@ export default function FriendRequests() {
 
   const handleConfirm = async (requestId: string) => {
     try {
-      await axios.post(`${baseURL}/api/req/accept`, {
-        requestId,
-        userId: localStorage.getItem("userId"),
-      })
+      const res = await fetch(`${baseURL}/api/req/accept/${requestId}`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "userId": cuser.id,
+        },
+
+        credentials: "include",
+      } )
+      const response = await res.json();
+      console.log(response);
       setRequests(prev => prev.filter(req => req._id !== requestId))
     } catch (err) {
       console.error("Error confirming friend request:", err)
@@ -48,11 +72,20 @@ export default function FriendRequests() {
 
   const handleDelete = async (requestId: string) => {
     try {
-      await axios.post(`${baseURL}/api/req/reject`, {
-        requestId,
-        userId: localStorage.getItem("userId"),
-      })
+      const res = await fetch(`${baseURL}/api/req/reject/${requestId}`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "userId": cuser.id,
+        },
+        body: JSON.stringify({ requestId }),
+        credentials: "include",
+      }
+      )
+      const response = await res.json();
+      console.log(response);
       setRequests(prev => prev.filter(req => req._id !== requestId))
+
     } catch (err) {
       console.error("Error deleting friend request:", err)
     }
@@ -61,6 +94,7 @@ export default function FriendRequests() {
   return (
     <div className="chat-container">
       <div className="card">
+       
         <div className="chat-header">
           <Link to="/chat" className="back-button">
             <ArrowLeft size={24} />
@@ -76,15 +110,30 @@ export default function FriendRequests() {
           <div className="friend-requests-list">
             {requests.map((request) => (
               <div key={request._id} className="contact-item" style={{ alignItems: "flex-start", padding: "1rem" }}>
-                <img
+                <div
+                          className="avatar"
+                          style={{
+                            border: false
+                              ? "2px solid gold"
+                              : false
+                                ? "2px solid #4CAF50"
+                                : undefined,
+                            backgroundColor: false ? "#4776e6" : undefined,
+                            color: false ? "white" : undefined,
+                            position: "relative",
+                          }}
+                        > 
+                        {getInitials(request.requesterId.name)} 
+                </div>
+                {/* <img
                   src={"/placeholder.svg"}
                   alt={request.requesterId.username}
                   className="avatar"
                   style={{ width: "3rem", height: "3rem", marginRight: "1rem" }}
-                />
+                /> */}
                 <div className="contact-info">
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <div className="contact-name">{request.requesterId.username}</div>
+                    <div className="contact-name">{request.requesterId.name}</div>
                     <div className="contact-status">{new Date(request.createdAt).toLocaleDateString()}</div>
                   </div>
                   <div className="contact-status" style={{ marginBottom: "0.5rem" }}>

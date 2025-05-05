@@ -73,7 +73,7 @@ export const createChat: RequestHandler = async (req: AuthRequest, res: Response
 export const getUserChats: RequestHandler = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.headers.userid as string;
-   
+   console.log(userId,"chats")
     const chats = await Chat.find({ participants: userId })
       .populate("participants", "name email")
       .populate("messages");

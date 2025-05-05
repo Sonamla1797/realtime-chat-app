@@ -922,7 +922,7 @@ export default function ChatList() {
                     }}
                     onClick={() => setShowAddFriendDialog(true)}
                   >
-                    {showAddFriendDialog && <FriendDialogBox setShowAddFriendDialog = {setShowAddFriendDialog} />}
+                    {showAddFriendDialog && <FriendDialogBox setShowAddFriendDialog = {setShowAddFriendDialog} requesterId={cuser.id} />}
                    
                     <div className="avatar" style={{ position: "relative" }}>
                       
@@ -945,7 +945,7 @@ export default function ChatList() {
                       </div>
                     </div>
                     <div className="contact-info">
-                      <div className="contact-name">My friends</div>
+                      <div className="contact-name">Add Friends</div>
                       <div className="contact-message">Tap to add new friends</div>
                     </div>
                   </div>
@@ -956,7 +956,7 @@ export default function ChatList() {
                   {friends.length > 0 ? (
                     friends.map((friend) => (
                       <div
-                        key={friend.id}
+                        key={friend._id}
                         className="contact-item"
                         style={{
                           cursor: "pointer",
