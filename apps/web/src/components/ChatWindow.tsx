@@ -12,6 +12,8 @@ import Message from "./Message"
 import { formatDistanceToNow } from "date-fns"
 /* import VideoCall from "./VideoCall" */
 import IncomingCallNotification from "./IncomingCallNotification"
+import { getSocket } from "../sockets/socket"
+const baseURL = import.meta.env.VITE_API_BASE_URL
 
 // Define these functions directly if the import is causing issues
 const isPreviewMode  = false/* = () => {
@@ -25,18 +27,6 @@ let socket: Socket | null = null
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 const token = localStorage.getItem("accessToken");
 const userName = user.name || "User";
-const getSocket = () => {
-  if (!socket) {
-    socket = io("http://localhost:5000", {
-      withCredentials: true,
-      transports: ["websocket", "polling"],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    })
-  }
-  return socket
-}
 
 const createMockSocket = () => {
   return {
@@ -197,7 +187,7 @@ const chatId = userId || null ;
       
       
 
-      const response = await fetch(`http://localhost:5000/api/chats/${chatId}`, {
+      const response = await fetch(`${baseURL}/api/chats/${chatId}`, {
         credentials: "include",
         method: "GET",
         headers: {
@@ -229,7 +219,7 @@ const chatId = userId || null ;
     try {
       console.log("No mock messages found for chatId:", chatId)
           setMessages([])
-      const response = await fetch(`http://localhost:5000/api/messages/${chatId}`, {
+      const response = await fetch(`${baseURL}/api/messages/${chatId}`, {
         
         method: "GET",
         headers: {

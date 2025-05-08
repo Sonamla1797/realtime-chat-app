@@ -1,41 +1,28 @@
 "use client"
 
-import { useState, useEffect,useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { Search, Plus, MoreVertical, Video, Bot } from 'lucide-react'
+import { Search, Plus, MoreVertical, Video, Bot } from "lucide-react"
 import { useAuth } from "../context/AuthContext"
 //import { mockUsers } from "../lib/mock-data"
 import VideoCall from "./VideoCall"
 import IncomingCallNotification from "./IncomingCallNotification"
 //import { dgroup , dstatus} from "./dummy";
 import { FriendDialogBox, GroupDialogBox } from "./dialogbox/DialogBox"
-import { User, Friends, Group } from "../type"
-const baseURL = import.meta.env.VITE_API_BASE_URL;
-
+import type { User, Friends, Group } from "../type"
+const baseURL = import.meta.env.VITE_API_BASE_URL
 
 import { getSocket } from "../sockets/socket"
 import SimplePeer from "simple-peer"
 import Header from "./chatComponents/Header"
 
-
-// Define isPreviewMode directly in this file if the import is causing issues
-/* const isPreviewMode = () => 
-  return (
-    typeof window !== "undefined" &&
-    (window.location.hostname === "localhost" || window.location.hostname.includes("vercel.app"))
-  )
-}
- */
-
 export default function ChatList() {
-  
   const [activeTab, setActiveTab] = useState("chats")
   const [users, setUsers] = useState<User[]>([])
-  //const [statusUpdates, setStatusUpdates] = useState<StatusUpdate[]>([])
   const [friends, setFriends] = useState<Friends[]>([])
   const [groups, setGroups] = useState<Group[]>([])
   const [searchQuery, setSearchQuery] = useState("")
- 
+
   const [darkMode, setDarkMode] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [showFavorites, setShowFavorites] = useState(false)
@@ -46,285 +33,217 @@ export default function ChatList() {
   const navigate = useNavigate()
 
   const [showVideoCall, setShowVideoCall] = useState(false)
+  const [streamReady, setStreamReady] = useState(false) // Track if stream is ready
 
   const [currentCaller, setCurrentCaller] = useState({ name: "", id: "" })
-  const [showAddFriendDialog, setShowAddFriendDialog] = useState(false);
-  const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
+  const [showAddFriendDialog, setShowAddFriendDialog] = useState(false)
+  const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false)
   const peerRef = useRef<SimplePeer.Instance | null>(null) // Store the peer connection
 
-  const localVideoRef = useRef<HTMLVideoElement>(null!) 
-  const remoteVideoRef = useRef<HTMLVideoElement>(null!) 
+  const localVideoRef = useRef<HTMLVideoElement>(null)
+  const remoteVideoRef = useRef<HTMLVideoElement>(null)
+  const localStreamRef = useRef<MediaStream | null>(null) // Store the local stream
 
   const [incomingCall, setIncomingCall] = useState<{ from: string; signal: any } | null>(null)
-  const[showIncomingCall, setShowIncomingCall] = useState(false); // Show incoming call modal/notification  
+  const [showIncomingCall, setShowIncomingCall] = useState(false) // Show incoming call modal/notification
 
-
-/*  const [peerConnection, setPeerConnection] = useState<SimplePeer.Instance | null>(null); // Store the peer connection */
-
-
-  const cuser = JSON.parse(localStorage.getItem("user") || "{}");
-  const socket = getSocket();
-
-
+  // Ensure video elements are created early
   useEffect(() => {
-    const getMedia = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-  
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-        }
-  
-        const peer = new SimplePeer({
-          initiator: true,
-          trickle: false,
-        });
-  
-        // ✅ Manually add tracks
-        stream.getTracks().forEach(track => peer.addTrack(track, stream));
-  
-        socket.emit("register", { userId: cuser.id });
-  
-        socket.on("incoming-call", ({ from, signal }) => {
-          peer.signal(signal); // VERY IMPORTANT
-          setIncomingCall({
-            from,
-            signal,
-          });
-          setShowIncomingCall(true);
-          console.log("Incoming call from:", from);
-        });
-  
-        socket.on("answer", ({ signal }) => {
-          peer?.signal(signal); // Answer received, signal back
-        });
-  
-        socket.on("reject-call", () => {
-          alert("Call was rejected.");
-          setShowVideoCall(false);
-        });
-        
-      } catch (err) {
-        console.error("Error getting media:", err);
-      }
-    };
-  
-    getMedia();
-  
+    if (!localVideoRef.current) {
+      console.log("Creating video elements in advance")
+      const localVideo = document.createElement("video")
+      localVideo.autoplay = true
+      localVideo.playsInline = true
+      localVideo.muted = true
+      localVideoRef.current = localVideo
+
+      const remoteVideo = document.createElement("video")
+      remoteVideo.autoplay = true
+      remoteVideo.playsInline = true
+      remoteVideoRef.current = remoteVideo
+    }
+  }, [])
+
+  const cuser = JSON.parse(localStorage.getItem("user") || "{}")
+  const socket = getSocket()
+  useEffect(() => {
+    socket.emit("register", { userId: cuser.id })
+
+    socket.on("incoming-call", ({ from, signal }) => {
+      setIncomingCall({ from, signal })
+      setShowIncomingCall(true)
+    })
+
+    socket.on("reject-call", () => {
+      alert("Call was rejected.")
+      setShowVideoCall(false)
+    })
+
     return () => {
-      socket.off("incoming-call");
-      socket.off("answer");
-      socket.off("reject-call");
-    };
-  
-  }, []);
-  
-  
+      socket.off("incoming-call")
+      socket.off("reject-call")
+    }
+  }, [cuser.id])
+
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate("/login");
-      return;
+      navigate("/login")
+      return
     }
-   
-    fetchChats();
+
+    fetchChats()
     fetchFriends()
+  }, [isAuthenticated, navigate])
 
-  }, [isAuthenticated, navigate]);
-
-/*   useEffect(() => {
-    // Simulate an incoming call after 30 seconds
-    if (!showVideoCall && !showIncomingCall) {
-      const randomUser = users[Math.floor(Math.random() * users.length)]
-      setCurrentCaller({
-        name: `${randomUser.firstName} ${randomUser.lastName}`,
-        id: randomUser.id,
-      })
-      setShowIncomingCall(true)
-    }
-
+  // Clean up media streams when component unmounts
+  useEffect(() => {
     return () => {
-      clearTimeout(incomingCallTimeout)
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => track.stop())
+        console.log("Stopped local media tracks on unmount")
+      }
     }
-  }, [showVideoCall, showIncomingCall, users]) */
+  }, [])
 
-  
   const fetchChats = async () => {
     try {
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
-      const token = localStorage.getItem("accessToken");
-      const userId = user.id;
-     
+      const user = JSON.parse(localStorage.getItem("user") || "{}")
+      const token = localStorage.getItem("accessToken")
+      const userId = user.id
 
       if (!userId) {
-        console.error("User ID not found in localStorage.");
-        return;
+        console.error("User ID not found in localStorage.")
+        return
       }
-  
+
       const response = await fetch(`${baseURL}/api/chats/user`, {
         method: "GET",
         headers: {
-          "Authorization": `Bearer ${token}`,
-          "userId": userId,
+          Authorization: `Bearer ${token}`,
+          userId: userId,
         },
         credentials: "include",
-        
-      });
-  
+      })
+
       if (!response.ok) {
-        throw new Error("Failed to fetch chats");
+        throw new Error("Failed to fetch chats")
       }
-      
-      const chats = await response.json();
-      setUsers(chats);
+
+      const chats = await response.json()
+      setUsers(chats)
       // Filter only group chats
-      const groupChats = chats.filter((chat: any) => chat.type === "group");
-  
+      const groupChats = chats.filter((chat: any) => chat.type === "group")
+
       const formattedGroups = groupChats.map((group: any) => ({
         id: group._id,
         name: group.name,
         participants: group.participants,
-      }));
-  
-      setGroups(formattedGroups);
+      }))
+
+      setGroups(formattedGroups)
     } catch (error) {
-      console.error("Error fetching groups:", error);
+      console.error("Error fetching groups:", error)
     }
-  };
+  }
+
   const fetchFriends = async () => {
     try {
-
-      const token = localStorage.getItem("accessToken");
-      const userId = cuser.id;
+      const token = localStorage.getItem("accessToken")
+      const userId = cuser.id
 
       if (!userId) {
-        console.error("User ID not found in localStorage.");
-        return;
+        console.error("User ID not found in localStorage.")
+        return
       }
-  
+
       const response = await fetch(`${baseURL}/api/friend/friends`, {
         method: "GET",
         headers: {
-          "Authorization": `Bearer ${token}`,
-          "userId": userId,
+          Authorization: `Bearer ${token}`,
+          userId: userId,
         },
         credentials: "include",
-        
-      });
-  
+      })
+
       if (!response.ok) {
-        throw new Error("Failed to fetch friends");
+        throw new Error("Failed to fetch friends")
       }
-      
-      const friendsList = await response.json();
-      setFriends(friendsList);
+
+      const friendsList = await response.json()
+      setFriends(friendsList)
     } catch (error) {
-      console.error("Error fetching friends:", error);
+      console.error("Error fetching friends:", error)
     }
   }
+
   const handleAddFriend = async (friendId: string) => {
-    try {                 
-      const token = localStorage.getItem("accessToken");
-      const userId = cuser.id;
+    try {
+      const token = localStorage.getItem("accessToken")
+      const userId = cuser.id
 
       if (!userId) {
-        console.error("User ID not found in localStorage.");
-        return;
+        console.error("User ID not found in localStorage.")
+        return
       }
-  
+
       const response = await fetch(`${baseURL}/api/friend/add`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${token}`,
-          "userId": userId,
+          Authorization: `Bearer ${token}`,
+          userId: userId,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ friendId }),
         credentials: "include",
-        
-      });
-  
+      })
+
       if (!response.ok) {
-        throw new Error("Failed to add friend");
+        throw new Error("Failed to add friend")
       }
-      
-      const updatedFriendsList = await response.json();
-      setFriends(updatedFriendsList);
-    }
-    catch (error) {
-      console.error("Error adding friend:", error);
+
+      const updatedFriendsList = await response.json()
+      setFriends(updatedFriendsList)
+    } catch (error) {
+      console.error("Error adding friend:", error)
     }
   }
-  const handleStartChat = async (type:string , participants:string[]) => {
-      try {
-        console.log("Starting chat with participants:", participants);
-        const token = localStorage.getItem("accessToken");
-        const userId = cuser.id;
-        
 
-        if (!userId) {
-          console.error("User ID not found in localStorage.");
-          return;
-        }
-    
-        const response = await fetch(`${baseURL}/api/chats/create`, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "userId": userId,
-            "Content-Type": "application/json", 
-          },
-          body: JSON.stringify({ 
-            userId,
-            participants,
-            type
-            
-           }),
-          credentials: "include",
-          
-        });
-    
-        if (!response.ok) {
-          throw new Error("Failed to start chat");
-        }
-        /* const rawChat = await response.json();
-
-        const newChat: User = {
-          _id: rawChat._id,
-          name: rawChat.name || "",
-          type: rawChat.type,
-          participants: rawChat.participants || [],
-          messages: rawChat.messages || [],
-          createdAt: rawChat.createdAt || new Date().toISOString(),
-          updatedAt: rawChat.updatedAt || new Date().toISOString(),
-        };    
-
-        setUsers((prevUsers) => [...prevUsers, newChat]); */
-        fetchChats(); // Refresh the chat list
-        setActiveTab("chats");
-      } catch (error) {
-        console.error("Error starting chat:", error);
-      }
-    }
-
-
-/*   const fetchUsers = async () => {
+  const handleStartChat = async (type: string, participants: string[]) => {
     try {
-      
+      console.log("Starting chat with participants:", participants)
+      const token = localStorage.getItem("accessToken")
+      const userId = cuser.id
 
-      const response = await fetch("`${baseURL}/api/users", {
+      if (!userId) {
+        console.error("User ID not found in localStorage.")
+        return
+      }
+
+      const response = await fetch(`${baseURL}/api/chats/create`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          userId: userId,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId,
+          participants,
+          type,
+        }),
         credentials: "include",
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setUsers(data)
+      if (!response.ok) {
+        throw new Error("Failed to start chat")
       }
+      fetchChats() // Refresh the chat list
+      setActiveTab("chats")
     } catch (error) {
-      console.error("Error fetching users:", error)
-      // Fallback to mock data
-      setUsers(mockUsers)
+      console.error("Error starting chat:", error)
     }
- */
+  }
+
   const handleLogout = () => {
     logout()
     navigate("/login")
@@ -365,7 +284,7 @@ export default function ChatList() {
 
   const filteredUsers = users.filter((user) => {
     // Filter by search query
-    const fullName = `${user.type === "group" ?user.name: user.participants.find(p => p.name !== cuser.name)?.name}`
+    const fullName = `${user.type === "group" ? user.name : user.participants.find((p) => p.name !== cuser.name)?.name}`
     const matchesSearch = fullName.includes(searchQuery.toLowerCase())
 
     // Filter by archived status if showing archived
@@ -390,98 +309,215 @@ export default function ChatList() {
     return `${userName.charAt(0)}`
   }
 
-/*   const handleAcceptCall = () => {
-    setShowIncomingCall(false)
-    setShowVideoCall(true)
-  } */
-    const initiateCall = async (targetChatId: string) => {
-      const stream: MediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    
+  const initiateCall = async (targetChatId: string) => {
+    try {
+      // Get user media
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      localStreamRef.current = stream
+
+      console.log("Media stream obtained:", stream.id)
+      console.log("Stream tracks:", {
+        videoTracks: stream.getVideoTracks().length,
+        audioTracks: stream.getAudioTracks().length,
+      })
+
+      // Assign to local video element
       if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
+        localVideoRef.current.srcObject = stream
+        console.log("Local stream assigned to video element:", stream.id)
+      } else {
+        console.error("Local video ref is null in initiateCall")
+        return
       }
-    
-      const peer: SimplePeer.Instance = new SimplePeer({
+
+      // Create peer connection
+      const peer = new SimplePeer({
         initiator: true,
         trickle: false,
-      });
-    
-      // ✅ Manually add tracks
-      stream.getTracks().forEach(track => peer.addTrack(track, stream));
-    
-      setShowVideoCall(true);
-    
+        stream, // Use the same stream instance
+      })
+
+      peerRef.current = peer
+
       peer.on("signal", (data) => {
         socket.emit("call-user", {
           to: targetChatId,
           from: cuser.id,
           signal: data,
-        });
-      });
-    
+        })
+      })
+
       peer.on("stream", (remoteStream) => {
-        if (remoteVideoRef.current && remoteStream) {
-          console.log("Received remote track:", remoteStream);
-          remoteVideoRef.current.srcObject = remoteStream ;
+        console.log("Remote stream received in initiateCall:", remoteStream.id)
+        console.log("Remote stream tracks:", {
+          videoTracks: remoteStream.getVideoTracks().length,
+          audioTracks: remoteStream.getAudioTracks().length,
+        })
+
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = remoteStream
+          console.log("Remote stream assigned to video element", remoteStream)
+        } else {
+          console.error("Remote video ref is null in initiateCall")
         }
-      });
-    };
-    
-    const acceptCall = async (): Promise<void> => {
-      const stream: MediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    
+
+        // Show video call after ensuring streams are assigned
+        setStreamReady(true)
+        setShowVideoCall(true)
+      })
+
+      peer.on("connect", () => {
+        console.log("Connected to peer")
+      })
+
+      peer.on("error", (err) => {
+        console.error("Peer connection error:", err)
+      })
+
+      socket.on("answer", ({ signal }) => {
+        peer.signal(signal)
+      })
+
+      // Show the call UI after a short delay to ensure streams are assigned
+      setTimeout(() => {
+        if (!showVideoCall) {
+          console.log("Showing call UI")
+          setStreamReady(true)
+          setShowVideoCall(true)
+        }
+      }, 1000)
+    } catch (error) {
+      console.error("Error initiating call:", error)
+      alert("Failed to access camera or microphone. Please check your permissions.")
+    }
+  }
+
+  const acceptCall = async (): Promise<void> => {
+    try {
+      // Get user media
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      localStreamRef.current = stream
+
+      console.log("Media stream obtained in acceptCall:", stream.id)
+      console.log("Stream tracks in acceptCall:", {
+        videoTracks: stream.getVideoTracks().length,
+        audioTracks: stream.getAudioTracks().length,
+      })
+
+      // Assign to local video element
       if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
+        localVideoRef.current.srcObject = stream
+        console.log("Local stream assigned to video element in acceptCall:", stream.id)
+
+        // Wait for the stream to be properly loaded in the video element
+        await new Promise((resolve) => {
+          localVideoRef.current!.onloadedmetadata = () => {
+            console.log("Local video metadata loaded in acceptCall")
+            resolve(true)
+          }
+
+          // Fallback if onloadedmetadata doesn't fire
+          setTimeout(resolve, 1000)
+        })
+
+        setStreamReady(true)
+      } else {
+        console.error("Local video ref is null in acceptCall")
+        setShowIncomingCall(false)
+        return
       }
-    
-      const peer: SimplePeer.Instance = new SimplePeer({
-        initiator: false, // You are answering
+
+      // Create peer connection
+      const peer = new SimplePeer({
+        initiator: false,
         trickle: false,
-      });
-    
-      // ✅ Manually add tracks
-      stream.getTracks().forEach(track => peer.addTrack(track, stream));
-    
-      peer.on("signal", (signalData: SimplePeer.SignalData) => {
+        stream, // Use the same stream instance
+      })
+
+      peerRef.current = peer
+
+      peer.on("stream", (remoteStream) => {
+        console.log("Remote stream received in acceptCall:", remoteStream.id)
+        console.log("Remote stream tracks in acceptCall:", {
+          videoTracks: remoteStream.getVideoTracks().length,
+          audioTracks: remoteStream.getAudioTracks().length,
+        })
+
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = remoteStream
+          console.log("Remote stream assigned to video element in acceptCall",remoteStream)
+        } else {
+          console.error("Remote video ref is null in acceptCall")
+        }
+
+        // Show video call after ensuring streams are assigned
+        setShowVideoCall(true)
+      })
+
+      peer.on("connect", () => {
+        console.log("Connected to peer in acceptCall")
+      })
+
+      peer.on("error", (err) => {
+        console.error("Peer connection error in acceptCall:", err)
+      })
+
+      peer.on("signal", (signalData) => {
         socket.emit("answer", {
           to: incomingCall?.from || "",
           signal: signalData,
-        });
-      });
-    
+        })
+      })
+
       if (incomingCall?.signal) {
-        peer.signal(incomingCall.signal);
+        peer.signal(incomingCall.signal)
       }
-    
-      peer.on("stream", (remoteStream) => {
-        if (remoteVideoRef.current && remoteStream) {
-          console.log("Received remote track:", remoteStream);
-          remoteVideoRef.current.srcObject = remoteStream ;
-        }
-      });
-    
-      setShowIncomingCall(false);
-      setShowVideoCall(true);
-    };
-    
-  
-    /* const handleDeclineCall = () => {
-    setShowIncomingCall(false)
-  } */
+
+      setShowIncomingCall(false)
+
+      // If we don't get a remote stream within 5 seconds, show the call UI anyway
+      
+    } catch (error) {
+      console.error("Error accepting call:", error)
+      setShowIncomingCall(false)
+      alert("Failed to access camera or microphone. Please check your permissions.")
+    }
+  }
+
   const rejectCall = () => {
     if (incomingCall) {
-      socket.emit("reject-call", { to: incomingCall.from }); // userId of caller
+      socket.emit("reject-call", { to: incomingCall.from })
     }
-    setShowIncomingCall(false);
-  };
+    setShowIncomingCall(false)
+  }
+
   const handleEndCall = () => {
-   
-    setShowVideoCall(false);
+    // Stop all tracks from the local stream
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => track.stop())
+      console.log("Stopped local media tracks")
+      localStreamRef.current = null
+    }
 
-  };
-  
+    // Close peer connection
+    if (peerRef.current) {
+      peerRef.current.destroy()
+      peerRef.current = null
+      console.log("Destroyed peer connection")
+    }
 
-  
+    // Clear video elements
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = null
+    }
+
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = null
+    }
+
+    setStreamReady(false)
+    setShowVideoCall(false)
+  }
 
   return (
     <div className="chat-container">
@@ -500,16 +536,16 @@ export default function ChatList() {
         >
           {/* Header with Settings Menu */}
           <Header
-        darkMode={darkMode}
-        toggleDarkMode={toggleDarkMode}
-        notifications={notifications}
-        toggleNotifications={toggleNotifications}
-        showFavorites={showFavorites}
-        setShowFavorites={setShowFavorites}
-        showArchived={showArchived}
-        setShowArchived={setShowArchived}
-        name={cuser.name}
-      />
+            darkMode={darkMode}
+            toggleDarkMode={toggleDarkMode}
+            notifications={notifications}
+            toggleNotifications={toggleNotifications}
+            showFavorites={showFavorites}
+            setShowFavorites={setShowFavorites}
+            showArchived={showArchived}
+            setShowArchived={setShowArchived}
+            name={cuser.name}
+          />
 
           {/* Filter indicators */}
           {(showFavorites || showArchived) && (
@@ -677,11 +713,8 @@ export default function ChatList() {
 
                 {filteredUsers.length > 0 ? (
                   filteredUsers.map((user) => (
-                    
                     <div key={user._id} style={{ position: "relative" }}>
-                      
                       <Link
-                      
                         to={`/chat/${user._id}`}
                         className="contact-item"
                         style={{
@@ -706,9 +739,9 @@ export default function ChatList() {
                             color: false ? "white" : undefined,
                             position: "relative",
                           }}
-                        > 
-                        {user.type === "group" ? getInitials(user.name) : "U" } 
-                         
+                        >
+                          {user.type === "group" ? getInitials(user.name) : "U"}
+
                           {false && (
                             <div
                               style={{
@@ -731,7 +764,9 @@ export default function ChatList() {
                         </div>
                         <div className="contact-info">
                           <div className="contact-name">
-                            {user.type === "group" ? user.name : user.participants.find(p => p.name !== cuser.name)?.name} 
+                            {user.type === "group"
+                              ? user.name
+                              : user.participants.find((p) => p.name !== cuser.name)?.name}
                             {favorites.includes(user._id) && (
                               <span style={{ color: "gold", marginLeft: "0.25rem" }}>★</span>
                             )}
@@ -751,34 +786,42 @@ export default function ChatList() {
                               </span>
                             )}
                           </div>
-                          {user.name && <div className="contact-message">
-                            {user.type === "group" ? "Group Chat": user.participants.find(p => p.name !== cuser.name)?.email} 
-                            </div>}
+                          {user.name && (
+                            <div className="contact-message">
+                              {user.type === "group"
+                                ? "Group Chat"
+                                : user.participants.find((p) => p.name !== cuser.name)?.email}
+                            </div>
+                          )}
                           <div className="contact-status">{true ? "Online" : "Offline"}</div>
                         </div>
 
-                       {/*  Call button - Made clickable  */}
+                        {/*  Call button - Made clickable  */}
                         <div style={{ display: "flex", alignItems: "center" }}>
                           {!false && (
                             <button
-                              style={{background: "none",border: "none",color: "rgba(255, 255, 255, 0.7)",cursor: "pointer",padding: "0.5rem",
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "rgba(255, 255, 255, 0.7)",
+                                cursor: "pointer",
+                                padding: "0.5rem",
                               }}
                               onClick={(e) => {
                                 e.preventDefault()
                                 e.stopPropagation()
                                 var target = user._id
-                                user.type === "group" ? alert("Group call not supported yet") : target = user.participants.find(p => p.name !== cuser.name)?._id || "";
-            
+                                user.type === "group"
+                                  ? alert("Group call not supported yet")
+                                  : (target = user.participants.find((p) => p.name !== cuser.name)?._id || "")
+
                                 initiateCall(target)
-                
                               }}
                             >
                               <Video size={18} />
                             </button>
                           )}
                         </div>
-                    
-                     
                       </Link>
 
                       {/* Context menu button */}
@@ -852,48 +895,46 @@ export default function ChatList() {
                           {archived.includes(user._id) ? "Unarchive chat" : "Archive chat"}
                         </div>
                         <div
-                            style={{
-                              padding: "0.5rem",
-                              color: darkMode ? "white" : "#333",
-                              cursor: "pointer",
-                              whiteSpace: "nowrap",
-                            }}
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              e.preventDefault();
+                          style={{
+                            padding: "0.5rem",
+                            color: darkMode ? "white" : "#333",
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                          }}
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            e.preventDefault()
 
-                              // Hide context menu
-                              const menu = document.getElementById(`context-menu-${user._id}`);
-                              if (menu) menu.style.display = "none";
+                            // Hide context menu
+                            const menu = document.getElementById(`context-menu-${user._id}`)
+                            if (menu) menu.style.display = "none"
 
-                              try {
-                                const token = localStorage.getItem("accessToken");
+                            try {
+                              const token = localStorage.getItem("accessToken")
 
-                                const response = await fetch(`${baseURL}/api/chats/${user._id}`, {
-                                  method: "DELETE", // Change to DELETE if your backend expects it
-                                  headers: {
-                                    "Content-Type": "application/json",
-                                    "Authorization": `Bearer ${token}`,
-                                    "userId": cuser.id,
-                                  }, 
-                                  body: JSON.stringify({ userId: cuser.id }), // Include userId in the body if needed
-                                  
-                                });
+                              const response = await fetch(`${baseURL}/api/chats/${user._id}`, {
+                                method: "DELETE", // Change to DELETE if your backend expects it
+                                headers: {
+                                  "Content-Type": "application/json",
+                                  Authorization: `Bearer ${token}`,
+                                  userId: cuser.id,
+                                },
+                                body: JSON.stringify({ userId: cuser.id }), // Include userId in the body if needed
+                              })
 
-                                if (!response.ok) {
-                                  throw new Error("Failed to remove friend");
-                                }
-
-                                // Optional: update local UI
-                                setUsers((prev) => prev.filter((u) => u._id !== user._id));
-                              } catch (error) {
-                                console.error("Error removing friend:", error);
+                              if (!response.ok) {
+                                throw new Error("Failed to remove friend")
                               }
-                            }}
-                          >
-                            Remove Chat
-                          </div>
 
+                              // Optional: update local UI
+                              setUsers((prev) => prev.filter((u) => u._id !== user._id))
+                            } catch (error) {
+                              console.error("Error removing friend:", error)
+                            }
+                          }}
+                        >
+                          Remove Chat
+                        </div>
                       </div>
                     </div>
                   ))
@@ -916,16 +957,17 @@ export default function ChatList() {
                   <h3 className="friends-heading">My friends</h3>
                   <div
                     className="contact-item"
-                    style={{ 
+                    style={{
                       backgroundColor: darkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.15)",
                       cursor: "pointer",
                     }}
                     onClick={() => setShowAddFriendDialog(true)}
                   >
-                    {showAddFriendDialog && <FriendDialogBox setShowAddFriendDialog = {setShowAddFriendDialog} requesterId={cuser.id} />}
-                   
+                    {showAddFriendDialog && (
+                      <FriendDialogBox setShowAddFriendDialog={setShowAddFriendDialog} requesterId={cuser.id} />
+                    )}
+
                     <div className="avatar" style={{ position: "relative" }}>
-                      
                       <div
                         style={{
                           position: "absolute",
@@ -960,9 +1002,7 @@ export default function ChatList() {
                         className="contact-item"
                         style={{
                           cursor: "pointer",
-                          backgroundColor: darkMode
-                            ? "rgba(255, 255, 255, 0.05)"
-                            : "rgba(255, 255, 255, 0.1)",
+                          backgroundColor: darkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.1)",
                         }}
                         onClick={() => handleStartChat("one-on-one", [friend._id, cuser.id])}
                       >
@@ -985,68 +1025,6 @@ export default function ChatList() {
                     <div style={{ opacity: 0.7 }}>No friends to show.</div>
                   )}
                 </div>
-
-                          
-                {/* Recent Updates */}
-                {/* <div className="status-section" style={{ marginTop: "1.5rem" }}>
-                  <h3 className="status-heading">Recent Updates</h3>
-                  {statusUpdates
-                    .filter((status) => !status.viewed)
-                    .map((status) => (
-                      <div
-                        key={status.id}
-                        className="contact-item"
-                        style={{
-                          cursor: "pointer",
-                          backgroundColor: darkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.1)",
-                        }}
-                        onClick={() => alert(`Viewing ${status.userName}'s status: ${status.content}`)}
-                      >
-                        <div
-                          className="avatar"
-                          style={{
-                            border: "2px solid #4776e6",
-                            position: "relative",
-                          }}
-                        >
-                          {status.userInitials}
-                        </div>
-                        <div className="contact-info">
-                          <div className="contact-name">{status.userName}</div>
-                          <div className="contact-message">{status.content}</div>
-                          <div className="contact-status">{status.timestamp}</div>
-                        </div>
-                      </div>
-                    ))}
-                </div> */}
-
-                {/* Viewed Updates */}
-                {/* <div className="status-section" style={{ marginTop: "1.5rem" }}>
-                  <h3 className="status-heading">Viewed Updates</h3>
-                  {statusUpdates
-                    .filter((status) => status.viewed)
-                    .map((status) => (
-                      <div
-                        key={status.id}
-                        className="contact-item"
-                        style={{
-                          opacity: 0.7,
-                          cursor: "pointer",
-                          backgroundColor: darkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.1)",
-                        }}
-                        onClick={() => alert(`Viewing ${status.userName}'s status: ${status.content}`)}
-                      >
-                        <div className="avatar" style={{ border: "2px solid #ccc" }}>
-                          {status.userInitials}
-                        </div>
-                        <div className="contact-info">
-                          <div className="contact-name">{status.userName}</div>
-                          <div className="contact-message">{status.content}</div>
-                          <div className="contact-status">{status.timestamp}</div>
-                        </div>
-                      </div>
-                    ))}
-                </div> */}
               </div>
             )}
 
@@ -1062,7 +1040,7 @@ export default function ChatList() {
                   }}
                   onClick={() => setShowCreateGroupDialog(true)}
                 >
-                   {showCreateGroupDialog && <GroupDialogBox setShowCreateGroupDialog = {setShowCreateGroupDialog}/>}
+                  {showCreateGroupDialog && <GroupDialogBox setShowCreateGroupDialog={setShowCreateGroupDialog} />}
                   <div
                     className="avatar"
                     style={{
@@ -1116,7 +1094,7 @@ export default function ChatList() {
             )}
           </div>
 
-       {/*   Logout button - Positioned higher with more space */}
+          {/*   Logout button - Positioned higher with more space */}
           <div style={{ padding: "1rem 0" }}>
             <button
               onClick={handleLogout}
@@ -1155,13 +1133,14 @@ export default function ChatList() {
           </div>
         </div>
       </div>
-      
+
       {showVideoCall && (
         <VideoCall
           contactName={currentCaller.name}
           contactAvatar="/placeholder.svg?height=80&width=80"
           localVideoRef={localVideoRef}
           remoteVideoRef={remoteVideoRef}
+          localStream={localStreamRef.current}
           onClose={() => setShowVideoCall(false)}
           onEndCall={handleEndCall}
         />

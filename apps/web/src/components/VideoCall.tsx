@@ -4,8 +4,8 @@ import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
 import { Mic, MicOff, Video, VideoOff, PhoneOff, Phone, Users, MoreVertical, MessageSquare, X } from "lucide-react"
-import { on } from "events"
 
+// Update the VideoCallProps interface to include localStream
 interface VideoCallProps {
   contactName?: string
   contactAvatar?: string
@@ -13,12 +13,14 @@ interface VideoCallProps {
   onClose: () => void
   groupCall?: boolean
   participants?: { name: string; avatar: string }[]
-  audioOnly?: boolean // Add this prop
-  localVideoRef: React.RefObject<HTMLVideoElement>;
-  remoteVideoRef: React.RefObject<HTMLVideoElement>;
-  onEndCall: () => void;
+  audioOnly?: boolean
+  localVideoRef: React.RefObject<HTMLVideoElement>
+  remoteVideoRef: React.RefObject<HTMLVideoElement>
+  localStream: MediaStream | null
+  onEndCall: () => void
 }
 
+// Update the function signature to include localStream
 export default function VideoCall({
   contactName = "Chef Alex",
   contactAvatar = "/placeholder.svg?height=80&width=80",
@@ -29,6 +31,7 @@ export default function VideoCall({
   audioOnly = false,
   localVideoRef,
   remoteVideoRef,
+  localStream,
   onEndCall,
 }: VideoCallProps) {
   const [callStatus, setCallStatus] = useState<"ringing" | "connected" | "ended">(isIncoming ? "ringing" : "ringing")
@@ -40,39 +43,63 @@ export default function VideoCall({
   const [showChat, setShowChat] = useState(false)
   const [message, setMessage] = useState("")
   const [messages, setMessages] = useState<{ sender: string; content: string; timestamp: Date }[]>([])
+  const [localStreamReady, setLocalStreamReady] = useState(false)
 
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Simulate video streams
+  // Check streams and set status
   useEffect(() => {
-    // Get user media for local video
-    if (localVideoRef.current) {
-      navigator.mediaDevices
-        .getUserMedia({ video: !audioOnly, audio: true })
-        .then((stream) => {
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = stream
-            console.log("Local video stream started",stream)
-         
-            // If audio only, disable video tracks
-            if (audioOnly) {
-              stream.getVideoTracks().forEach((track) => {
-                track.enabled = false
-              })
-            }
-          }
-        })
-        .catch((err) => {
-          console.error("Error accessing camera:", err)
-          // Fallback to a black screen
-          if (localVideoRef.current) {
-            localVideoRef.current.poster = "/placeholder.svg?height=300&width=300"
-          }
-        })
+    console.log("VideoCall mounted with refs:", {
+      localRef: localVideoRef?.current ? "exists" : "null",
+      remoteRef: remoteVideoRef?.current ? "exists" : "null",
+      localStream: localStream ? "exists" : "null",
+      remoteStream: remoteVideoRef?.current?.srcObject ? "exists" : "null",
+    })
+
+    // Ensure the local stream is assigned to the video element
+    if (localStream && localVideoRef.current) {
+      // Only assign if not already assigned
+      if (localVideoRef.current.srcObject !== localStream) {
+        console.log("Assigning local stream to video element in VideoCall")
+        localVideoRef.current.srcObject = localStream
+      }
+      setLocalStreamReady(true)
+      setCallStatus("connected")
+      startCallDurationTimer()
+    } else if (localVideoRef?.current?.srcObject) {
+      console.log("Local video already has a stream assigned")
+      setLocalStreamReady(true)
+      setCallStatus("connected")
+      startCallDurationTimer()
+    } else {
+      console.warn("Local stream not available on mount - waiting...")
+
+      // Check for local stream every 200ms
+      const checkInterval = setInterval(() => {
+        if (localVideoRef?.current?.srcObject) {
+          console.log("Local stream now available")
+          setLocalStreamReady(true)
+          setCallStatus("connected")
+          startCallDurationTimer()
+          clearInterval(checkInterval)
+        }
+      }, 200)
+
+      // Clean up interval after 5 seconds if stream never arrives
+      setTimeout(() => {
+        clearInterval(checkInterval)
+        if (!localStreamReady) {
+          console.error("Local stream never became available after timeout")
+          // Still show the UI even without local stream
+          setCallStatus("connected")
+          startCallDurationTimer()
+        }
+      }, 5000)
+
+      // Clean up interval
+      return () => clearInterval(checkInterval)
     }
-    
-    
-  }, [contactAvatar, isIncoming, audioOnly])
+  }, [localStream])
 
   // Auto-hide controls after inactivity
   useEffect(() => {
@@ -100,7 +127,7 @@ export default function VideoCall({
     return () => {
       if (rejectTimeout) clearTimeout(rejectTimeout)
     }
-  }, [isIncoming, callStatus])
+  }, [isIncoming, callStatus, onEndCall])
 
   // Clean up on unmount
   useEffect(() => {
@@ -109,16 +136,16 @@ export default function VideoCall({
         clearInterval(durationIntervalRef.current)
       }
 
-      // Stop all media tracks
-      if (localVideoRef.current && localVideoRef.current.srcObject) {
-        const stream = localVideoRef.current.srcObject as MediaStream
-        stream.getTracks().forEach((track) => track.stop())
-      }
+      // Don't stop media tracks here - let the parent component handle this
+      console.log("VideoCall component unmounting")
     }
   }, [])
 
   const startCallDurationTimer = () => {
-    
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current)
+    }
+
     durationIntervalRef.current = setInterval(() => {
       setCallDuration((prev) => prev + 1)
     }, 1000)
@@ -127,19 +154,12 @@ export default function VideoCall({
   const handleAcceptCall = () => {
     setCallStatus("connected")
     startCallDurationTimer()
-
-    // Simulate remote video
-    /* if (remoteVideoRef.current) {
-      remoteVideoRef.current.poster = contactAvatar
-      remoteVideoRef.current.play().catch((e) => console.log("Autoplay prevented:", e))
-    } */
   }
 
-  
   const toggleMute = () => {
     setIsMuted(!isMuted)
 
-    // In a real app, you would mute the audio track here
+    // Mute the audio track
     if (localVideoRef.current && localVideoRef.current.srcObject) {
       const stream = localVideoRef.current.srcObject as MediaStream
       stream.getAudioTracks().forEach((track) => {
@@ -151,7 +171,7 @@ export default function VideoCall({
   const toggleVideo = () => {
     setIsVideoEnabled(!isVideoEnabled)
 
-    // In a real app, you would disable the video track here
+    // Disable the video track
     if (localVideoRef.current && localVideoRef.current.srcObject) {
       const stream = localVideoRef.current.srcObject as MediaStream
       stream.getVideoTracks().forEach((track) => {
@@ -302,7 +322,7 @@ export default function VideoCall({
               transform: "scaleX(-1)", // Mirror effect
             }}
           />
-          {!isVideoEnabled && (
+          {(!isVideoEnabled || !localStreamReady) && (
             <div
               style={{
                 position: "absolute",
@@ -314,9 +334,15 @@ export default function VideoCall({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                flexDirection: "column",
               }}
             >
               <VideoOff size={24} color="white" />
+              {!localStreamReady && (
+                <p style={{ color: "white", fontSize: "10px", textAlign: "center", margin: "5px 0 0" }}>
+                  Connecting...
+                </p>
+              )}
             </div>
           )}
         </div>

@@ -12,16 +12,29 @@ import messageRoutes from "./routes/messageRoutes";
 import { Message } from "./models/Message";
 import {Server} from "socket.io"; // Import Server from socket.io 
 import { connectDB } from "./db";
-
+import os from "os"; // Import os to get local IP address
 // Load environment variables
 dotenv.config();
 
 const app = express();
+function getLocalIp() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name] || []) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
 
+const PORT = 5000;
+const LOCAL_IP = getLocalIp();
 // Middleware
 app.use(express.json()); // Parse JSON request body
 app.use(cors({
-  origin: 'http://localhost:5173',  // your React frontend origin
+  origin: `http://localhost:5173`,  // your React frontend origin
   credentials: true,
 }));
 
@@ -33,7 +46,7 @@ connectDB();
 const server = http.createServer(app);
 
 // Initialize socket.io with the HTTP server
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server, { cors: { origin: `*` } });
 const userSocketMap = new Map(); // or a plain object {}
 
 // WebSocket Logic: Handling connections and messages
@@ -66,7 +79,7 @@ io.on("connection", (socket) => {
   }); */
   // Handling answer from a receiver
     socket.on('answer', ({ to, signal }) => {
-    
+      console.log(`Answering call to ${to}`);
       io.to(to).emit('answer', { signal});
     });
   // ❌ New: handle rejection (optional)
@@ -149,8 +162,14 @@ app.get("/", (req, res) => {
   res.send("🚀 Chat App Backend Running!");
 });
 
+/* 
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Server is running and accessible at: http://${LOCAL_IP}:${PORT}`);
+  console.log(`✅ WebSocket server is running and accessible at: ws://${LOCAL_IP}:${PORT}`);
+});
+ */
 // Start Server
-const PORT =  5000;
+
 const HOST = '172.20.10.7';
 server.listen(PORT , () => {
   console.log("Server is running on http://0.0.0.0:5000");
