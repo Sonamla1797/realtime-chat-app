@@ -10,7 +10,7 @@ interface VideoCallProps {
   contactName?: string
   contactAvatar?: string
   isIncoming?: boolean
-  onClose: () => void
+
   groupCall?: boolean
   participants?: { name: string; avatar: string }[]
   audioOnly?: boolean
@@ -25,7 +25,7 @@ export default function VideoCall({
   contactName = "Chef Alex",
   contactAvatar = "/placeholder.svg?height=80&width=80",
   isIncoming = false,
-  onClose,
+
   groupCall = false,
   participants = [],
   audioOnly = false,
@@ -54,7 +54,9 @@ export default function VideoCall({
       remoteRef: remoteVideoRef?.current ? "exists" : "null",
       localStream: localStream ? "exists" : "null",
       remoteStream: remoteVideoRef?.current?.srcObject ? "exists" : "null",
+
     })
+    console.log("VideoCall remoteStream:", remoteVideoRef?.current?.srcObject)
 
     // Ensure the local stream is assigned to the video element
     if (localStream && localVideoRef.current) {

@@ -7,9 +7,9 @@ import { useParams, useNavigate } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 import { useAuth } from "../context/AuthContext"
 /* import { mockPrivateMessages, mockUsers, generateAIResponse } from "../lib/mock-data" */
-import { io, type Socket } from "socket.io-client"
+import { type Socket } from "socket.io-client"
 import Message from "./Message"
-import { formatDistanceToNow } from "date-fns"
+
 /* import VideoCall from "./VideoCall" */
 import IncomingCallNotification from "./IncomingCallNotification"
 import { getSocket } from "../sockets/socket"

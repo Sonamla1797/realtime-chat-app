@@ -32,7 +32,7 @@ import {
 import { Link } from "react-router-dom"
 
 // Add these imports at the top with the other imports
-import VideoCall from "./VideoCall"
+/* import VideoCall from "./VideoCall" */
 import IncomingCallNotification from "./IncomingCallNotification"
 
 interface PollOption {
@@ -111,9 +111,9 @@ export default function GroupChat({ groupId = "dessert-debate" }: GroupChatProps
   const [isEncrypted, setIsEncrypted] = useState(true)
 
   // Add these state variables inside the GroupChat component
-  const [showVideoCall, setShowVideoCall] = useState(false)
+/*   const [showVideoCall, setShowVideoCall] = useState(false) */
   const [showIncomingCall, setShowIncomingCall] = useState(false)
-  const [isGroupCall, setIsGroupCall] = useState(false)
+/*   const [isGroupCall, setIsGroupCall] = useState(false) */
 
   // Dummy group data
   const groupInfo = {
@@ -701,13 +701,13 @@ export default function GroupChat({ groupId = "dessert-debate" }: GroupChatProps
 
   // Add these functions inside the GroupChat component
   const handleStartCall = (groupCallMode = false) => {
-    setIsGroupCall(groupCallMode)
+  /*   setIsGroupCall(groupCallMode) */
     setShowVideoCall(true)
   }
 
   const handleAcceptCall = () => {
     setShowIncomingCall(false)
-    setShowVideoCall(true)
+   /*  setShowVideoCall(true) */
   }
 
   const handleDeclineCall = () => {
@@ -2048,7 +2048,7 @@ export default function GroupChat({ groupId = "dessert-debate" }: GroupChatProps
           </form>
         </div>
       </div>
-      {showVideoCall && (
+      {/* {showVideoCall && (
         <VideoCall
           contactName={groupInfo.name}
           contactAvatar="/placeholder.svg?height=80&width=80"
@@ -2059,7 +2059,7 @@ export default function GroupChat({ groupId = "dessert-debate" }: GroupChatProps
             avatar: "/placeholder.svg?height=80&width=80",
           }))}
         />
-      )}
+      )} */}
 
       {showIncomingCall && (
         <IncomingCallNotification

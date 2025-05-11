@@ -33,7 +33,7 @@ export default function ChatList() {
   const navigate = useNavigate()
 
   const [showVideoCall, setShowVideoCall] = useState(false)
-  const [streamReady, setStreamReady] = useState(false) // Track if stream is ready
+ /*  const [streamReady, setStreamReady] = useState(false) // Track if stream is ready */
 
   const [currentCaller, setCurrentCaller] = useState({ name: "", id: "" })
   const [showAddFriendDialog, setShowAddFriendDialog] = useState(false)
@@ -71,6 +71,7 @@ export default function ChatList() {
 
     socket.on("incoming-call", ({ from, signal }) => {
       setIncomingCall({ from, signal })
+      setCurrentCaller({ name: from, id: from })  
       setShowIncomingCall(true)
     })
 
@@ -175,7 +176,7 @@ export default function ChatList() {
       console.error("Error fetching friends:", error)
     }
   }
-
+/* 
   const handleAddFriend = async (friendId: string) => {
     try {
       const token = localStorage.getItem("accessToken")
@@ -207,7 +208,7 @@ export default function ChatList() {
       console.error("Error adding friend:", error)
     }
   }
-
+ */
   const handleStartChat = async (type: string, participants: string[]) => {
     try {
       console.log("Starting chat with participants:", participants)
@@ -362,7 +363,7 @@ export default function ChatList() {
         }
 
         // Show video call after ensuring streams are assigned
-        setStreamReady(true)
+       /*  setStreamReady(true) */
         setShowVideoCall(true)
       })
 
@@ -382,7 +383,7 @@ export default function ChatList() {
       setTimeout(() => {
         if (!showVideoCall) {
           console.log("Showing call UI")
-          setStreamReady(true)
+          /* setStreamReady(true) */
           setShowVideoCall(true)
         }
       }, 1000)
@@ -420,7 +421,7 @@ export default function ChatList() {
           setTimeout(resolve, 1000)
         })
 
-        setStreamReady(true)
+       /*  setStreamReady(true) */
       } else {
         console.error("Local video ref is null in acceptCall")
         setShowIncomingCall(false)
@@ -442,13 +443,15 @@ export default function ChatList() {
           videoTracks: remoteStream.getVideoTracks().length,
           audioTracks: remoteStream.getAudioTracks().length,
         })
-
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = remoteStream
-          console.log("Remote stream assigned to video element in acceptCall",remoteStream)
-        } else {
-          console.error("Remote video ref is null in acceptCall")
-        }
+        setTimeout(() => {
+          if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = remoteStream
+            console.log("Remote stream assigned to video element in acceptCall",remoteStream)
+          } else {
+            console.error("Remote video ref is null in acceptCall")
+          }
+        }, 500) // Wait for 1 second before assigning the stream
+        
 
         // Show video call after ensuring streams are assigned
         setShowVideoCall(true)
@@ -515,7 +518,7 @@ export default function ChatList() {
       remoteVideoRef.current.srcObject = null
     }
 
-    setStreamReady(false)
+ /*    setStreamReady(false) */
     setShowVideoCall(false)
   }
 
@@ -1138,10 +1141,9 @@ export default function ChatList() {
         <VideoCall
           contactName={currentCaller.name}
           contactAvatar="/placeholder.svg?height=80&width=80"
-          localVideoRef={localVideoRef}
-          remoteVideoRef={remoteVideoRef}
+          localVideoRef={localVideoRef as React.RefObject<HTMLVideoElement>}
+          remoteVideoRef={remoteVideoRef as React.RefObject<HTMLVideoElement>}
           localStream={localStreamRef.current}
-          onClose={() => setShowVideoCall(false)}
           onEndCall={handleEndCall}
         />
       )}
