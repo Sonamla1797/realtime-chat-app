@@ -61,14 +61,21 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit('user-joined', { userId, socketId: socket.id });
   });
     // 📞 New: handle outgoing call
-  socket.on("call-user", ({ to, signal, from }) => {
+  socket.on("call-user", ({ to, signal, from ,name, callType}) => {
     const callerSocketId = userSocketMap.get(from); // get caller's socket ID 
     const targetSocketId = userSocketMap.get(to);
+    
     if (targetSocketId) {
-      io.to(targetSocketId).emit("incoming-call", { from: callerSocketId, signal });
+      io.to(targetSocketId).emit("incoming-call", { from: callerSocketId, signal,ct:callType,un:name });
     }
     console.log(`User ${from} is calling ${to}`);
   });
+  socket.on("end-call", ({ to }) => {
+    const targetSocketId = userSocketMap.get(to);           
+    if (targetSocketId) {
+      io.to(targetSocketId).emit("call-ended"); // this will trigger frontend alert
+    }
+  })
   // Handling offer from a caller
   socket.on('offer', ({ targetSocketId, offer, from }) => {
     io.to(targetSocketId).emit('offer', { offer, from });
@@ -83,8 +90,9 @@ io.on("connection", (socket) => {
       io.to(to).emit('answer', { signal});
     });
   // ❌ New: handle rejection (optional)
-  socket.on("reject-call", ({ userId }) => {
-    const targetSocketId = userSocketMap.get(userId);
+  socket.on("reject-call", ({ to }) => {
+    const targetSocketId = userSocketMap.get(to);
+    console.log(`User ${to} rejected the call`);  
     if (targetSocketId) {
       io.to(targetSocketId).emit("reject-call"); // this will trigger frontend alert
     }
@@ -106,7 +114,10 @@ io.on("connection", (socket) => {
     socket.join(chatId);  // Join the chat room identified by chatId
     console.log(`User joined chat room ${chatId}`);
   });
-
+  socket.on("hello", (data) => {
+    console.log("Hello from client:", data);    
+  });
+  
   // Handle incoming messages
   socket.on("sendMessage", async (data) => {
     const { chatId, sender, content } = data;

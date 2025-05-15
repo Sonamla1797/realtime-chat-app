@@ -109,9 +109,9 @@ export default function Header(props: any) {
         </Link>
 
         {/* Group Page Link */}
-        <Link to="/group" style={{ color: "white" }}>
+       {/*  <Link to="/group" style={{ color: "white" }}>
           <Users size={24} />
-        </Link>
+        </Link> */}
       </div>
     </div>
   )

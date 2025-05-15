@@ -27,39 +27,7 @@ let socket: Socket | null = null
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 const token = localStorage.getItem("accessToken");
 const userName = user.name || "User";
-
-const createMockSocket = () => {
-  return {
-    on: (event: string, callback: Function) => {
-      console.log("Mock socket on:", event)
-
-      // Simulate receiving messages
-      if (event === "message" || event === "privateMessage") {
-        setTimeout(() => {
-          callback({
-            id: `msg${Date.now()}`,
-            sender: event === "privateMessage" ? "user1" : "user1",
-            receiver: event === "privateMessage" ? "user123" : undefined,
-            content: "This is a demo message in preview mode!",
-            timestamp: new Date().toISOString(),
-          })
-        }, 5000)
-      }
-    },
-    emit: (event: string, data: any) => {
-      console.log("Mock socket emit:", event, data)
-      return true // Return a value to avoid void return type issues
-    },
-    disconnect: () => {
-      console.log("Mock socket disconnected")
-      return true // Return a value to avoid void return type issues
-    },
-    off: (event: string) => {
-      console.log("Mock socket off:", event)
-      return true // Return a value to avoid void return type issues
-    },
-  } as unknown as Socket
-}
+socket= getSocket();
 
 interface MessageType {
   content: string
@@ -138,7 +106,7 @@ const chatId = userId || null ;
 
     // Set up socket connection
     try {
-      const socket = isPreviewMode ? createMockSocket() : getSocket()
+      const socket =  getSocket()
       socket.connect();
       socket.emit("joinChat", chatId)
       socket.on("message", (message) => {
@@ -248,6 +216,7 @@ const chatId = userId || null ;
 
   const sendMessage = (e: React.FormEvent) => {
     e.preventDefault()
+    const socket = getSocket()
 
     if (!message.trim() || !user || !chatId) return
 
@@ -259,8 +228,9 @@ const chatId = userId || null ;
         sender: userName,
       }
 
+
       // Add the message to the UI
-      
+      console.log("Sending message:", socket);
       socket?.emit("sendMessage", { chatId, ...newMessage });
 
       

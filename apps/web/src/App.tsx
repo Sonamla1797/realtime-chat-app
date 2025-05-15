@@ -2,13 +2,14 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import { AuthProvider } from "./context/AuthContext"
 import Home from "./components/Home"
 import ChatWindow from "./components/ChatWindow"
-import ChatList from "./components/ChatList"
-import GroupChat from "./components/Groupchat"
+import ChatList from "./components/ChatLIst"
+import GroupChat from "./components/GroupChat"
 import FriendRequests from "./components/FriendRequests"
 import Login from "./auth/login"
 import Signup from "./auth/signup"
 import "./App.css"
 
+import LandingPage from "./landing/Landing"
 
 if (typeof global === 'undefined') {
   global = window;
@@ -22,7 +23,8 @@ function App() {
       <Router>
         <div className="app-container">
           <Routes>
-            <Route path="/" element={<Navigate to="/login" />} />
+            <Route path="/" element={<Navigate to="/home" />} />
+            <Route path="/home" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/home" element={<Home />} />

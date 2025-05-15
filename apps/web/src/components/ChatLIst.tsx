@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { Search, Plus, MoreVertical, Video, Bot } from "lucide-react"
+import { Search, Plus, MoreVertical, Video, Bot,Phone } from "lucide-react"
 import { useAuth } from "../context/AuthContext"
 //import { mockUsers } from "../lib/mock-data"
-import VideoCall from "./VideoCall"
+import VideoCall from "./CallComponents/VideoCall"
+import AudioCall from "./CallComponents/AudioCall"
 import IncomingCallNotification from "./IncomingCallNotification"
 //import { dgroup , dstatus} from "./dummy";
 import { FriendDialogBox, GroupDialogBox } from "./dialogbox/DialogBox"
@@ -33,6 +34,8 @@ export default function ChatList() {
   const navigate = useNavigate()
 
   const [showVideoCall, setShowVideoCall] = useState(false)
+
+  const [showAudioCall, setShowAudioCall] = useState(false)
  /*  const [streamReady, setStreamReady] = useState(false) // Track if stream is ready */
 
   const [currentCaller, setCurrentCaller] = useState({ name: "", id: "" })
@@ -46,7 +49,7 @@ export default function ChatList() {
 
   const [incomingCall, setIncomingCall] = useState<{ from: string; signal: any } | null>(null)
   const [showIncomingCall, setShowIncomingCall] = useState(false) // Show incoming call modal/notification
-
+  const[callType, setCallType] = useState("audio") // Track the type of call (audio/video)
   // Ensure video elements are created early
   useEffect(() => {
     if (!localVideoRef.current) {
@@ -69,14 +72,22 @@ export default function ChatList() {
   useEffect(() => {
     socket.emit("register", { userId: cuser.id })
 
-    socket.on("incoming-call", ({ from, signal }) => {
+    socket.on("incoming-call", ({ from, signal,ct,un }) => {
       setIncomingCall({ from, signal })
-      setCurrentCaller({ name: from, id: from })  
+      console.log("Incoming callType",un,ct)
+      setCallType(ct)
+      setCurrentCaller({ name: un, id: from })  
       setShowIncomingCall(true)
     })
-
+    socket.on("call-ended", () => {
+      alert("Call ended.")
+      setShowAudioCall(false)
+      setShowVideoCall(false)
+    })
     socket.on("reject-call", () => {
       alert("Call was rejected.")
+      console.log("Call was rejected.")
+      setShowAudioCall(false)
       setShowVideoCall(false)
     })
 
@@ -310,13 +321,14 @@ export default function ChatList() {
     return `${userName.charAt(0)}`
   }
 
-  const initiateCall = async (targetChatId: string) => {
+  const initiateCall = async (targetChatId: string , userName:string, ct:string) => {
     try {
       // Get user media
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       localStreamRef.current = stream
+      setCurrentCaller ({ name: userName, id: targetChatId }) // Set the current caller
+    setCallType(ct)
 
-      console.log("Media stream obtained:", stream.id)
       console.log("Stream tracks:", {
         videoTracks: stream.getVideoTracks().length,
         audioTracks: stream.getAudioTracks().length,
@@ -339,11 +351,13 @@ export default function ChatList() {
       })
 
       peerRef.current = peer
-
+      console.log(cuser.name,callType)
       peer.on("signal", (data) => {
         socket.emit("call-user", {
           to: targetChatId,
           from: cuser.id,
+          name: cuser.name,
+          callType: ct,
           signal: data,
         })
       })
@@ -364,7 +378,8 @@ export default function ChatList() {
 
         // Show video call after ensuring streams are assigned
        /*  setStreamReady(true) */
-        setShowVideoCall(true)
+
+       ct == "audio"? setShowAudioCall(true) :setShowVideoCall(true)
       })
 
       peer.on("connect", () => {
@@ -382,9 +397,10 @@ export default function ChatList() {
       // Show the call UI after a short delay to ensure streams are assigned
       setTimeout(() => {
         if (!showVideoCall) {
-          console.log("Showing call UI")
+          console.log(callType)
           /* setStreamReady(true) */
-          setShowVideoCall(true)
+
+          ct === "audio"? setShowAudioCall(true) :setShowVideoCall(true)
         }
       }, 1000)
     } catch (error) {
@@ -454,7 +470,7 @@ export default function ChatList() {
         
 
         // Show video call after ensuring streams are assigned
-        setShowVideoCall(true)
+        callType === "audio"? setShowAudioCall(true) :setShowVideoCall(true)
       })
 
       peer.on("connect", () => {
@@ -508,18 +524,20 @@ export default function ChatList() {
       peerRef.current = null
       console.log("Destroyed peer connection")
     }
-
+    socket.emit("end-call", { to: currentCaller.id })
     // Clear video elements
-    if (localVideoRef.current) {
+/*     if (localVideoRef.current) {
       localVideoRef.current.srcObject = null
-    }
+    } */
 
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = null
     }
 
  /*    setStreamReady(false) */
-    setShowVideoCall(false)
+     setShowAudioCall(false) ;
+     setShowVideoCall(false);
+    setShowIncomingCall(false)
   }
 
   return (
@@ -639,7 +657,7 @@ export default function ChatList() {
             {activeTab === "chats" && (
               <div>
                 {/* Add Group Chat Link */}
-                <Link
+               {/*  <Link
                   to="/group"
                   className="contact-item"
                   style={{ backgroundColor: darkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.1)" }}
@@ -652,10 +670,10 @@ export default function ChatList() {
                     <div className="contact-message">Great choice 🍰</div>
                     <div className="contact-status">32 members</div>
                   </div>
-                </Link>
+                </Link> */}
 
                 {/* AI Assistant - Highlighted and clearly visible */}
-                <Link
+                {/* <Link
                   to={`/chat/ai-assistant`}
                   className="contact-item"
                   style={{
@@ -712,7 +730,7 @@ export default function ChatList() {
                     <div className="contact-message">How can I help you today?</div>
                     <div className="contact-status">Online</div>
                   </div>
-                </Link>
+                </Link> */}
 
                 {filteredUsers.length > 0 ? (
                   filteredUsers.map((user) => (
@@ -816,9 +834,36 @@ export default function ChatList() {
                                 var target = user._id
                                 user.type === "group"
                                   ? alert("Group call not supported yet")
-                                  : (target = user.participants.find((p) => p.name !== cuser.name)?._id || "")
+                                  : (target = user.participants.find((p) => p.name !== cuser.name)?._id || "");
+                   
+                                initiateCall(target,user.name ,"audio")
+                              }}
+                            >
+                              <Phone size={18} />
+                            </button>
+                          )}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          {!false && (
+                            <button
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "rgba(255, 255, 255, 0.7)",
+                                cursor: "pointer",
+                                padding: "0.5rem",
+                              }}
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                var target = user._id
+                                user.type === "group"
+                                  ? alert("Group call not supported yet")
+                                  : (target = user.participants.find((p) => p.name !== cuser.name)?._id || "");
 
-                                initiateCall(target)
+        
+                                initiateCall(target , user.name,"video");
+                              
                               }}
                             >
                               <Video size={18} />
@@ -1068,7 +1113,7 @@ export default function ChatList() {
                   filteredGroups.map((group) => (
                     <Link
                       key={group.id}
-                      to={`/group/${group.id}`}
+                      to={`/chat/${group.id}`}
                       className="contact-item"
                       style={{ backgroundColor: darkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.1)" }}
                     >
@@ -1136,8 +1181,17 @@ export default function ChatList() {
           </div>
         </div>
       </div>
-
-      {showVideoCall && (
+      {showAudioCall && (
+        <AudioCall
+          contactName={currentCaller.name}
+          contactAvatar="/placeholder.svg?height=80&width=80"
+          localVideoRef={localVideoRef as React.RefObject<HTMLVideoElement>}
+          remoteVideoRef={remoteVideoRef as React.RefObject<HTMLVideoElement>}
+          localStream={localStreamRef.current}
+          onEndCall={handleEndCall}
+        />
+      )}
+      {showVideoCall && ( 
         <VideoCall
           contactName={currentCaller.name}
           contactAvatar="/placeholder.svg?height=80&width=80"
@@ -1156,6 +1210,7 @@ export default function ChatList() {
           }}
           onAccept={acceptCall}
           onDecline={rejectCall}
+          isAudioCall={callType === "audio"? true : false}
         />
       )}
     </div>
